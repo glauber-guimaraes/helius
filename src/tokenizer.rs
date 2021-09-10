@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone)]
 pub enum Token {
     Identifier(String),
@@ -7,9 +9,24 @@ pub enum Token {
     Assignment,
     Plus,
     Minus,
+    Mul,
+    Div,
     Comma,
     Newline,
     Eof,
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Token::Identifier(i) => f.write_fmt(format_args!("Ident({})", &i)),
+            Token::Number(i) => f.write_fmt(format_args!("N({})", i)),
+            Token::String(s) => f.write_fmt(format_args!("\"{}\"", s)),
+            Token::Plus => f.write_str("+"),
+            Token::Minus => f.write_str("-"),
+            _ => f.write_fmt(format_args!("{:?}", self)),
+        }
+    }
 }
 
 pub struct Tokenizer {
@@ -55,6 +72,8 @@ impl Tokenizer {
                 '=' => Ok(Token::Assignment),
                 '+' => Ok(Token::Plus),
                 '-' => Ok(Token::Minus),
+                '*' => Ok(Token::Mul),
+                '/' => Ok(Token::Div),
                 ',' => Ok(Token::Comma),
                 '"' => Ok(Token::String(self.parse_string())),
                 _ => Err(TokenError::Generic),
@@ -63,13 +82,6 @@ impl Tokenizer {
             self.index += 1;
             self.next()
         }
-    }
-
-    pub fn peek(&mut self) -> Result<Token, TokenError> {
-        let index = self.index;
-        let token = self.next();
-        self.index = index;
-        token
     }
 
     fn parse_number(&mut self) -> i32 {

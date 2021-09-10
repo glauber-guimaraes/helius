@@ -6,13 +6,17 @@ mod tokenizer;
 use tokenizer::{Token, Tokenizer};
 
 const PROGRAM_SOURCE: &str = "a = 2
-b = 3 4
+b = 3
 c = a + b
 d = a - b
+e = c * d
+f = c / d
+g = c * d + a
 
 print a, b
 print \"Hello world\"
 print c, d
+print a + b, c
 ";
 
 struct Parser {
@@ -36,7 +40,7 @@ impl Parser {
          * print ::= Print expr [exprlist]
          * exprlist ::= Comma expr [exprlist]
          * expr ::= (Identifier | Number) [binary_op expr]
-         * binary_op ::= '+' | '-'
+         * binary_op ::= '+' | '-' | '*' | '/'
          * end ::= EOF
          */
         self.program();
@@ -60,19 +64,25 @@ impl Parser {
     }
 
     fn expect(&mut self, token: Token, msg: &str) {
-        let next_token = self.tokenizer.peek().unwrap();
-        if mem::discriminant(&next_token) != mem::discriminant(&token) {
-            println!("Expected token {:?} got {:?}\n{}", token, next_token, msg);
+        //let next_token = self.tokenizer.peek().unwrap();
+        if !self.match_and_advance(&token) {
+            println!(
+                "Expected token {:?} got {:?}\n{}",
+                token,
+                self.current.as_ref().unwrap(),
+                msg
+            );
             panic!();
         }
     }
 
     fn program(&mut self) {
+        self.advance();
         loop {
-            while self.match_and_advance(Token::Newline) {}
+            while self.match_and_advance(&Token::Newline) {}
             self.parse_statement();
 
-            if self.match_and_advance(Token::Eof) {
+            if self.match_and_advance(&Token::Eof) {
                 break;
             }
 
@@ -80,9 +90,9 @@ impl Parser {
         }
     }
 
-    fn match_and_advance(&mut self, token: Token) -> bool {
-        let next = self.tokenizer.peek().unwrap();
-        if mem::discriminant(&next) == mem::discriminant(&token) {
+    fn match_and_advance(&mut self, token: &Token) -> bool {
+        //let next = self.tokenizer.peek().unwrap();
+        if mem::discriminant(self.current.as_ref().unwrap()) == mem::discriminant(&token) {
             self.advance();
             return true;
         }
@@ -94,7 +104,7 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) {
-        match self.tokenizer.peek().unwrap() {
+        match self.current.as_ref().unwrap() {
             Token::Identifier(_) => {
                 self.parse_assignment();
             }
@@ -106,46 +116,54 @@ impl Parser {
     }
 
     fn parse_assignment(&mut self) {
-        let ident = match self.tokenizer.next().unwrap() {
-            Token::Identifier(t) => t,
+        let ident = match self.current.as_ref().unwrap() {
+            Token::Identifier(t) => t.clone(),
             _ => panic!(),
         };
-
-        assert!(
-            self.match_and_advance(Token::Assignment),
-            "Expected `=` after identifier"
-        );
-        print!("Assignment of `{}` :", ident);
+        self.advance();
+        self.expect(Token::Assignment, "Expected after identifier");
+        print!("Assignment of `{}`: ", ident);
         self.parse_expression();
         println!();
     }
 
     fn parse_print(&mut self) {
-        assert!(self.match_and_advance(Token::Print));
-        print!("Print :");
+        assert!(self.match_and_advance(&Token::Print));
+        print!("Print: ");
         self.parse_expression();
 
-        while self.match_and_advance(Token::Comma) {
+        while self.match_and_advance(&Token::Comma) {
+            print!(", ");
             self.parse_expression();
         }
         println!();
     }
 
     fn parse_expression(&mut self) {
-        self.advance();
         let action = match self.current.as_ref().unwrap() {
-            Token::Identifier(ident) => format!("Expr({}) ", ident),
-            Token::Number(n) => format!("Number({}) ", n),
-            Token::String(s) => format!("Str({}) ", s),
+            Token::Identifier(_) | Token::Number(_) | Token::String(_) => {
+                format!("{} ", self.current.as_ref().unwrap())
+            }
             _ => panic!(),
         };
+        self.advance();
 
-        if self.match_and_advance(Token::Plus) || self.match_and_advance(Token::Minus) {
-            print!("{:?} {}", self.current.as_ref().unwrap(), &action);
-            self.parse_expression();
-        } else {
-            print!("{}", &action);
+        match &self.current.as_ref().unwrap() {
+            Token::Mul | Token::Div | Token::Plus | Token::Minus => {
+                print!("[{}] {}", self.current.as_ref().unwrap(), &action);
+                self.advance();
+                self.parse_expression();
+            }
+            _ => {
+                print!("{}", &action);
+            }
         }
+    }
+
+    fn consume(&mut self) -> Token {
+        let t = self.current.as_ref().unwrap().clone();
+        self.advance();
+        t
     }
 }
 

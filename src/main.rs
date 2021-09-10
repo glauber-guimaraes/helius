@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, mem};
+use std::{collections::HashMap, mem, ops};
 
 mod tokenizer;
 use tokenizer::{Token, Tokenizer};
@@ -9,15 +9,74 @@ const PROGRAM_SOURCE: &str = "a = 2
 b = 3
 c = a + b
 d = a - b
-e = c * d
-f = c / d;
-g = c * d + a
+e = c * d + a
+f = c + d * a
+g = 1 * 2 / 3
 
+print a
 print a, b
 print \"Hello world\"
 print c, d
 print a + b, c
 ";
+
+#[derive(PartialEq, PartialOrd, Debug)]
+enum Precedence {
+    None,
+    Assignment,     // =
+    Addition,       // + -
+    Multiplication, // * /
+    Unary,          // -n
+    Primary,
+}
+
+impl ops::Add<i32> for Precedence {
+    type Output = Precedence;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        if rhs.abs() != 1 {
+            panic!("Can only increase or decrease Precedence by 1");
+        }
+        if rhs == 1 {
+            match self {
+                Precedence::None => Precedence::Assignment,
+                Precedence::Assignment => Precedence::Addition,
+                Precedence::Addition => Precedence::Multiplication,
+                Precedence::Multiplication => Precedence::Unary,
+                Precedence::Unary => Precedence::Primary,
+                Precedence::Primary => panic!("Trying to increase from highest precedence"),
+            }
+        } else {
+            match self {
+                Precedence::None => panic!("Trying to decrease from lowest precedence"),
+                Precedence::Assignment => Precedence::None,
+                Precedence::Addition => Precedence::Assignment,
+                Precedence::Multiplication => Precedence::Addition,
+                Precedence::Unary => Precedence::Multiplication,
+                Precedence::Primary => Precedence::Unary,
+            }
+        }
+    }
+}
+
+impl From<Token> for Precedence {
+    fn from(token: Token) -> Self {
+        match token {
+            Token::Identifier(_) => Precedence::Primary,
+            Token::Number(_) => Precedence::Primary,
+            Token::String(_) => Precedence::Primary,
+            Token::Print => Precedence::None,
+            Token::Assignment => Precedence::Assignment,
+            Token::Plus => Precedence::Addition,
+            Token::Minus => Precedence::Addition,
+            Token::Mul => Precedence::Multiplication,
+            Token::Div => Precedence::Multiplication,
+            Token::Comma => Precedence::None,
+            Token::Newline => Precedence::None,
+            Token::Eof => Precedence::None,
+        }
+    }
+}
 
 struct Parser {
     tokenizer: Tokenizer,
@@ -85,8 +144,6 @@ impl Parser {
             if self.match_and_advance(&Token::Eof) {
                 break;
             }
-
-            self.expect(Token::Newline, "");
         }
     }
 
@@ -123,41 +180,42 @@ impl Parser {
         self.advance();
         self.expect(Token::Assignment, "Expected after identifier");
         print!("Assignment of `{}`: ", ident);
-        self.parse_expression();
+        print!("{}", self.parse_expression(Precedence::Assignment));
+        self.expect(Token::Newline, "");
         println!();
     }
 
     fn parse_print(&mut self) {
         assert!(self.match_and_advance(&Token::Print));
         print!("Print: ");
-        self.parse_expression();
+        print!("{}", self.parse_expression(Precedence::Assignment));
 
         while self.match_and_advance(&Token::Comma) {
             print!(", ");
-            self.parse_expression();
+            print!("{}", self.parse_expression(Precedence::Assignment));
         }
         println!();
     }
 
-    fn parse_expression(&mut self) {
-        let action = match self.current.as_ref().unwrap() {
+    fn parse_expression(&mut self, precedence: Precedence) -> String {
+        // prefix expression
+        let mut lhs = match self.current.as_ref().unwrap() {
             Token::Identifier(_) | Token::Number(_) | Token::String(_) => {
-                format!("{} ", self.current.as_ref().unwrap())
+                format!("{}", self.current.as_ref().unwrap())
             }
-            _ => panic!(),
+            _ => panic!("Expected prefix expression, found {:?}", self.current),
         };
         self.advance();
 
-        match &self.current.as_ref().unwrap() {
-            Token::Mul | Token::Div | Token::Plus | Token::Minus => {
-                print!("[{}] {}", self.current.as_ref().unwrap(), &action);
-                self.advance();
-                self.parse_expression();
-            }
-            _ => {
-                print!("{}", &action);
-            }
+        // infix expression
+        while precedence < self.current.as_ref().unwrap().clone().into() {
+            let op = self.current.as_ref().unwrap().clone();
+            let new_precedence: Precedence = self.current.as_ref().unwrap().clone().into();
+            self.advance();
+            let rhs = self.parse_expression(new_precedence);
+            lhs = format!("[{}] {} {}", op, &lhs, &rhs);
         }
+        lhs
     }
 
     fn consume(&mut self) -> Token {
@@ -219,5 +277,5 @@ fn main() {
     let tokenizer = Tokenizer::new(PROGRAM_SOURCE.to_owned());
     let mut parser = Parser::new(tokenizer);
 
-    parser.print();
+    parser.parse();
 }

@@ -10,7 +10,7 @@ b = 3
 c = a + b
 d = a - b
 e = c * d
-f = c / d
+f = c / d;
 g = c * d + a
 
 print a, b
@@ -219,5 +219,5 @@ fn main() {
     let tokenizer = Tokenizer::new(PROGRAM_SOURCE.to_owned());
     let mut parser = Parser::new(tokenizer);
 
-    parser.parse();
+    parser.print();
 }

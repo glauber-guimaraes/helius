@@ -32,11 +32,13 @@ impl Display for Token {
 pub struct Tokenizer {
     source: Vec<char>,
     index: usize,
+    line: usize,
+    column: usize,
 }
 
 #[derive(Debug)]
 pub enum TokenError {
-    Generic,
+    Generic(usize, usize),
 }
 
 impl Tokenizer {
@@ -44,6 +46,8 @@ impl Tokenizer {
         Tokenizer {
             source: source.chars().collect(),
             index: 0,
+            line: 0,
+            column: 0,
         }
     }
 
@@ -57,7 +61,7 @@ impl Tokenizer {
         if chr.is_ascii_digit() {
             Ok(Token::Number(self.parse_number()))
         } else if chr.is_ascii_whitespace() && chr == '\n' {
-            self.index += 1;
+            self.advance();
             Ok(Token::Newline)
         } else if chr.is_ascii_alphabetic() {
             let ident = self.parse_identifier();
@@ -67,7 +71,7 @@ impl Tokenizer {
                 Ok(Token::Identifier(ident))
             }
         } else if chr.is_ascii_punctuation() {
-            self.index += 1;
+            self.advance();
             match chr {
                 '=' => Ok(Token::Assignment),
                 '+' => Ok(Token::Plus),
@@ -76,11 +80,22 @@ impl Tokenizer {
                 '/' => Ok(Token::Div),
                 ',' => Ok(Token::Comma),
                 '"' => Ok(Token::String(self.parse_string())),
-                _ => Err(TokenError::Generic),
+                _ => Err(TokenError::Generic(self.line, self.column)),
             }
         } else {
-            self.index += 1;
+            self.advance();
             self.next()
+        }
+    }
+
+    fn advance(&mut self) {
+        let chr = self.source[self.index];
+        self.index += 1;
+        self.column += 1;
+
+        if chr == '\n' {
+            self.line += 1;
+            self.column = 0;
         }
     }
 
@@ -88,7 +103,7 @@ impl Tokenizer {
         let mut number_str = String::new();
         while self.source[self.index].is_ascii_alphanumeric() {
             number_str.push(self.source[self.index]);
-            self.index += 1;
+            self.advance();
         }
         number_str.parse::<i32>().unwrap()
     }
@@ -99,7 +114,7 @@ impl Tokenizer {
         while self.source[self.index].is_ascii_alphanumeric() {
             let chr = self.source[self.index];
             ident.push(chr);
-            self.index += 1;
+            self.advance();
         }
         ident
     }
@@ -109,10 +124,10 @@ impl Tokenizer {
 
         while self.source[self.index] != '"' {
             str.push(self.source[self.index]);
-            self.index += 1;
+            self.advance();
         }
         // Skip the ending `"`
-        self.index += 1;
+        self.advance();
         str
     }
 }

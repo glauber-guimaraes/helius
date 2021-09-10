@@ -92,34 +92,7 @@ impl Parser {
     }
 
     fn parse(&mut self) {
-        /*
-         * program ::= {Newline | stmt} end
-         * stmt ::= assignment | print
-         * assignment ::= Identifier '=' expr
-         * print ::= Print expr [exprlist]
-         * exprlist ::= Comma expr [exprlist]
-         * expr ::= (Identifier | Number) [binary_op expr]
-         * binary_op ::= '+' | '-' | '*' | '/'
-         * end ::= EOF
-         */
         self.program();
-    }
-
-    fn print(&mut self) {
-        loop {
-            let token = self.tokenizer.next();
-            match token {
-                Ok(Token::Eof) => {
-                    println!("--- EOF ---");
-                    break;
-                }
-                Ok(t) => println!("{:?}", t),
-                Err(e) => {
-                    println!("Error!\n    {:?}", &e);
-                    break;
-                }
-            };
-        }
     }
 
     fn expect(&mut self, token: Token, msg: &str) {

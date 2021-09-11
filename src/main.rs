@@ -83,6 +83,25 @@ struct Parser {
     current: Option<Token>,
 }
 
+#[derive(Debug)]
+struct ParserError {
+    msg: String,
+    line: usize,
+    column: usize,
+}
+
+impl ParserError {
+    fn new(msg: &str, line: usize, column: usize) -> Self {
+        Self {
+            msg: msg.to_string(),
+            line,
+            column,
+        }
+    }
+}
+
+type ParserResult = Result<(), ParserError>;
+
 impl Parser {
     fn new(tokenizer: Tokenizer) -> Self {
         Parser {
@@ -95,23 +114,30 @@ impl Parser {
         self.program();
     }
 
-    fn expect(&mut self, token: TokenType, msg: &str) {
+    fn expect(&mut self, token: TokenType, msg: &str) -> ParserResult {
         if !self.match_and_advance(token) {
-            println!(
-                "Expected token {:?} got {:?}\n{}",
-                token,
-                self.current.as_ref().unwrap(),
-                msg
-            );
-            panic!();
+            return Err(ParserError::new(
+                &format!(
+                    "Expected token {:?} got {:?}\n{}",
+                    token,
+                    self.current.as_ref().unwrap(),
+                    msg
+                ),
+                self.current.as_ref().unwrap().line,
+                self.current.as_ref().unwrap().column,
+            ));
         }
+        Ok(())
     }
 
     fn program(&mut self) {
         self.advance();
         loop {
             while self.match_and_advance(TokenType::Newline) {}
-            self.parse_statement();
+            match self.parse_statement() {
+                Ok(_) => (),
+                Err(e) => panic!("{:?}", e),
+            }
 
             if self.match_and_advance(TokenType::Eof) {
                 break;
@@ -120,7 +146,6 @@ impl Parser {
     }
 
     fn match_and_advance(&mut self, token: TokenType) -> bool {
-        //let next = self.tokenizer.peek().unwrap();
         if self.current.as_ref().unwrap().is_type(token) {
             self.advance();
             return true;
@@ -129,35 +154,42 @@ impl Parser {
     }
 
     fn advance(&mut self) {
-        self.current = self.tokenizer.next().ok();
-    }
-
-    fn parse_statement(&mut self) {
-        match self.current.as_ref().unwrap().r#type {
-            TokenType::Identifier => {
-                self.parse_assignment();
-            }
-            TokenType::Print => {
-                self.parse_print();
-            }
-            _ => (),
+        self.current = match self.tokenizer.next() {
+            Ok(token) => Some(token),
+            Err(err) => panic!("Lexical error {:?}", err),
         }
     }
 
-    fn parse_assignment(&mut self) {
+    fn parse_statement(&mut self) -> ParserResult {
+        match self.current.as_ref().unwrap().r#type {
+            TokenType::Identifier => self.parse_assignment(),
+            TokenType::Print => self.parse_print(),
+            _ => Err(ParserError::new(
+                &format!(
+                    "Unexpected statement start `{}`",
+                    &self.current.as_ref().unwrap()
+                ),
+                self.current.as_ref().unwrap().line,
+                self.current.as_ref().unwrap().column,
+            )),
+        }
+    }
+
+    fn parse_assignment(&mut self) -> ParserResult {
         let ident = match self.current.as_ref().unwrap().r#type {
             TokenType::Identifier => self.current.as_ref().unwrap().lexeme.clone(),
             _ => panic!(),
         };
         self.advance();
-        self.expect(TokenType::Assignment, "Expected after identifier");
+        self.expect(TokenType::Assignment, "Expected after identifier")?;
         print!("Assignment of `{}`: ", ident);
         print!("{}", self.parse_expression(Precedence::Assignment));
-        self.expect(TokenType::Newline, "");
         println!();
+        self.expect(TokenType::Newline, "")?;
+        Ok(())
     }
 
-    fn parse_print(&mut self) {
+    fn parse_print(&mut self) -> ParserResult {
         assert!(self.match_and_advance(TokenType::Print));
         print!("Print: ");
         print!("{}", self.parse_expression(Precedence::Assignment));
@@ -167,6 +199,7 @@ impl Parser {
             print!("{}", self.parse_expression(Precedence::Assignment));
         }
         println!();
+        Ok(())
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> String {

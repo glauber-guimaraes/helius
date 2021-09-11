@@ -63,6 +63,7 @@ pub struct Tokenizer {
 #[derive(Debug)]
 pub enum TokenError {
     Generic(usize, usize),
+    UndefinedCharacter(usize, usize),
 }
 
 impl Tokenizer {
@@ -76,7 +77,7 @@ impl Tokenizer {
     }
 
     fn create_token(&self, r#type: TokenType, lexeme: &str) -> Token {
-        Token::new(r#type, lexeme.to_string(), self.line, self.column)
+        Token::new(r#type, lexeme.to_string(), self.line + 1, self.column)
     }
 
     pub fn next(&mut self) -> Result<Token, TokenError> {
@@ -112,7 +113,7 @@ impl Tokenizer {
                     let lexeme = self.parse_string();
                     Ok(self.create_token(TokenType::String, &lexeme))
                 }
-                _ => Err(TokenError::Generic(self.line, self.column)),
+                _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
             }
         } else {
             self.advance();

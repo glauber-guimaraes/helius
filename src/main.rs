@@ -58,12 +58,12 @@ impl Parser {
         self.program();
     }
 
-    fn expect(&mut self, token: TokenType, msg: &str) -> ParserResult {
-        if !self.match_and_advance(token) {
+    fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult {
+        if !self.match_and_advance(token_type) {
             return Err(ParserError::new(
                 &format!(
                     "Expected token {:?} got {:?}\n{}",
-                    token,
+                    token_type,
                     self.current.as_ref().unwrap(),
                     msg
                 ),
@@ -90,8 +90,8 @@ impl Parser {
         }
     }
 
-    fn match_and_advance(&mut self, token: TokenType) -> bool {
-        if self.current.as_ref().unwrap().is_type(token) {
+    fn match_and_advance(&mut self, token_type: TokenType) -> bool {
+        if self.current.as_ref().unwrap().is_type(token_type) {
             self.advance();
             return true;
         }

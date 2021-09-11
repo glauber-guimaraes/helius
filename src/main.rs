@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, mem, ops};
+use std::{collections::HashMap, ops};
 
 mod tokenizer;
-use tokenizer::{Token, Tokenizer};
+use tokenizer::{Token, TokenType, Tokenizer};
 
 const PROGRAM_SOURCE: &str = "a = 2
 b = 3
@@ -59,21 +59,21 @@ impl ops::Add<i32> for Precedence {
     }
 }
 
-impl From<Token> for Precedence {
-    fn from(token: Token) -> Self {
-        match token {
-            Token::Identifier(_) => Precedence::Primary,
-            Token::Number(_) => Precedence::Primary,
-            Token::String(_) => Precedence::Primary,
-            Token::Print => Precedence::None,
-            Token::Assignment => Precedence::Assignment,
-            Token::Plus => Precedence::Addition,
-            Token::Minus => Precedence::Addition,
-            Token::Mul => Precedence::Multiplication,
-            Token::Div => Precedence::Multiplication,
-            Token::Comma => Precedence::None,
-            Token::Newline => Precedence::None,
-            Token::Eof => Precedence::None,
+impl From<&Token> for Precedence {
+    fn from(token: &Token) -> Self {
+        match token.r#type {
+            TokenType::Identifier => Precedence::Primary,
+            TokenType::Number => Precedence::Primary,
+            TokenType::String => Precedence::Primary,
+            TokenType::Print => Precedence::None,
+            TokenType::Assignment => Precedence::Assignment,
+            TokenType::Plus => Precedence::Addition,
+            TokenType::Minus => Precedence::Addition,
+            TokenType::Mul => Precedence::Multiplication,
+            TokenType::Div => Precedence::Multiplication,
+            TokenType::Comma => Precedence::None,
+            TokenType::Newline => Precedence::None,
+            TokenType::Eof => Precedence::None,
         }
     }
 }
@@ -95,9 +95,8 @@ impl Parser {
         self.program();
     }
 
-    fn expect(&mut self, token: Token, msg: &str) {
-        //let next_token = self.tokenizer.peek().unwrap();
-        if !self.match_and_advance(&token) {
+    fn expect(&mut self, token: TokenType, msg: &str) {
+        if !self.match_and_advance(token) {
             println!(
                 "Expected token {:?} got {:?}\n{}",
                 token,
@@ -111,18 +110,18 @@ impl Parser {
     fn program(&mut self) {
         self.advance();
         loop {
-            while self.match_and_advance(&Token::Newline) {}
+            while self.match_and_advance(TokenType::Newline) {}
             self.parse_statement();
 
-            if self.match_and_advance(&Token::Eof) {
+            if self.match_and_advance(TokenType::Eof) {
                 break;
             }
         }
     }
 
-    fn match_and_advance(&mut self, token: &Token) -> bool {
+    fn match_and_advance(&mut self, token: TokenType) -> bool {
         //let next = self.tokenizer.peek().unwrap();
-        if mem::discriminant(self.current.as_ref().unwrap()) == mem::discriminant(&token) {
+        if self.current.as_ref().unwrap().is_type(token) {
             self.advance();
             return true;
         }
@@ -134,11 +133,11 @@ impl Parser {
     }
 
     fn parse_statement(&mut self) {
-        match self.current.as_ref().unwrap() {
-            Token::Identifier(_) => {
+        match self.current.as_ref().unwrap().r#type {
+            TokenType::Identifier => {
                 self.parse_assignment();
             }
-            Token::Print => {
+            TokenType::Print => {
                 self.parse_print();
             }
             _ => (),
@@ -146,24 +145,24 @@ impl Parser {
     }
 
     fn parse_assignment(&mut self) {
-        let ident = match self.current.as_ref().unwrap() {
-            Token::Identifier(t) => t.clone(),
+        let ident = match self.current.as_ref().unwrap().r#type {
+            TokenType::Identifier => self.current.as_ref().unwrap().lexeme.clone(),
             _ => panic!(),
         };
         self.advance();
-        self.expect(Token::Assignment, "Expected after identifier");
+        self.expect(TokenType::Assignment, "Expected after identifier");
         print!("Assignment of `{}`: ", ident);
         print!("{}", self.parse_expression(Precedence::Assignment));
-        self.expect(Token::Newline, "");
+        self.expect(TokenType::Newline, "");
         println!();
     }
 
     fn parse_print(&mut self) {
-        assert!(self.match_and_advance(&Token::Print));
+        assert!(self.match_and_advance(TokenType::Print));
         print!("Print: ");
         print!("{}", self.parse_expression(Precedence::Assignment));
 
-        while self.match_and_advance(&Token::Comma) {
+        while self.match_and_advance(TokenType::Comma) {
             print!(", ");
             print!("{}", self.parse_expression(Precedence::Assignment));
         }
@@ -172,8 +171,8 @@ impl Parser {
 
     fn parse_expression(&mut self, precedence: Precedence) -> String {
         // prefix expression
-        let mut lhs = match self.current.as_ref().unwrap() {
-            Token::Identifier(_) | Token::Number(_) | Token::String(_) => {
+        let mut lhs = match self.current.as_ref().unwrap().r#type {
+            TokenType::Identifier | TokenType::Number | TokenType::String => {
                 format!("{}", self.current.as_ref().unwrap())
             }
             _ => panic!("Expected prefix expression, found {:?}", self.current),
@@ -181,9 +180,9 @@ impl Parser {
         self.advance();
 
         // infix expression
-        while precedence < self.current.as_ref().unwrap().clone().into() {
+        while precedence < self.current.as_ref().unwrap().into() {
             let op = self.current.as_ref().unwrap().clone();
-            let new_precedence: Precedence = self.current.as_ref().unwrap().clone().into();
+            let new_precedence: Precedence = self.current.as_ref().unwrap().into();
             self.advance();
             let rhs = self.parse_expression(new_precedence);
             lhs = format!("[{}] {} {}", op, &lhs, &rhs);
@@ -207,10 +206,10 @@ enum Variant {
 
 impl From<Token> for Variant {
     fn from(token: Token) -> Self {
-        match token {
-            Token::Identifier(_) => todo!(),
-            Token::Number(_) => todo!(),
-            Token::String(_) => todo!(),
+        match token.r#type {
+            TokenType::Identifier => todo!(),
+            TokenType::Number => todo!(),
+            TokenType::String => todo!(),
             _ => panic!("Invalid conversion for token {:?}", token),
         }
     }

@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
-pub enum Token {
-    Identifier(String),
-    Number(i32),
-    String(String),
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub enum TokenType {
+    Identifier,
+    Number,
+    String,
     Print,
     Assignment,
     Plus,
@@ -16,14 +16,38 @@ pub enum Token {
     Eof,
 }
 
+#[derive(Debug, Clone)]
+pub struct Token {
+    pub r#type: TokenType,
+    pub lexeme: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+impl Token {
+    fn new(r#type: TokenType, lexeme: String, line: usize, column: usize) -> Self {
+        Token {
+            r#type,
+            lexeme,
+            line,
+            column,
+        }
+    }
+
+    pub fn is_type(&self, other: TokenType) -> bool {
+        self.r#type == other
+    }
+}
+
 impl Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        match self {
-            Token::Identifier(i) => f.write_fmt(format_args!("Ident({})", &i)),
-            Token::Number(i) => f.write_fmt(format_args!("N({})", i)),
-            Token::String(s) => f.write_fmt(format_args!("\"{}\"", s)),
-            Token::Plus => f.write_str("+"),
-            Token::Minus => f.write_str("-"),
+        match self.r#type {
+            TokenType::Identifier => f.write_fmt(format_args!("Ident({})", &self.lexeme)),
+            TokenType::Number => f.write_fmt(format_args!("N({})", &self.lexeme)),
+            TokenType::String => f.write_fmt(format_args!("\"{}\"", &self.lexeme)),
+            TokenType::Plus | TokenType::Minus | TokenType::Mul | TokenType::Div => {
+                f.write_str(&self.lexeme)
+            }
             _ => f.write_fmt(format_args!("{:?}", self)),
         }
     }
@@ -51,35 +75,43 @@ impl Tokenizer {
         }
     }
 
+    fn create_token(&self, r#type: TokenType, lexeme: &str) -> Token {
+        Token::new(r#type, lexeme.to_string(), self.line, self.column)
+    }
+
     pub fn next(&mut self) -> Result<Token, TokenError> {
         if self.index == self.source.len() {
-            return Ok(Token::Eof);
+            return Ok(self.create_token(TokenType::Eof, ""));
         }
 
         let chr = self.source[self.index];
 
         if chr.is_ascii_digit() {
-            Ok(Token::Number(self.parse_number()))
+            let lexeme = self.parse_number();
+            Ok(self.create_token(TokenType::Number, &lexeme))
         } else if chr.is_ascii_whitespace() && chr == '\n' {
             self.advance();
-            Ok(Token::Newline)
+            Ok(self.create_token(TokenType::Newline, "\n"))
         } else if chr.is_ascii_alphabetic() {
             let ident = self.parse_identifier();
             if ident == "print" {
-                Ok(Token::Print)
+                Ok(self.create_token(TokenType::Print, "print"))
             } else {
-                Ok(Token::Identifier(ident))
+                Ok(self.create_token(TokenType::Identifier, &ident))
             }
         } else if chr.is_ascii_punctuation() {
             self.advance();
             match chr {
-                '=' => Ok(Token::Assignment),
-                '+' => Ok(Token::Plus),
-                '-' => Ok(Token::Minus),
-                '*' => Ok(Token::Mul),
-                '/' => Ok(Token::Div),
-                ',' => Ok(Token::Comma),
-                '"' => Ok(Token::String(self.parse_string())),
+                '=' => Ok(self.create_token(TokenType::Assignment, "=")),
+                '+' => Ok(self.create_token(TokenType::Plus, "+")),
+                '-' => Ok(self.create_token(TokenType::Minus, "-")),
+                '*' => Ok(self.create_token(TokenType::Mul, "*")),
+                '/' => Ok(self.create_token(TokenType::Div, "/")),
+                ',' => Ok(self.create_token(TokenType::Comma, ",")),
+                '"' => {
+                    let lexeme = self.parse_string();
+                    Ok(self.create_token(TokenType::String, &lexeme))
+                }
                 _ => Err(TokenError::Generic(self.line, self.column)),
             }
         } else {
@@ -99,13 +131,13 @@ impl Tokenizer {
         }
     }
 
-    fn parse_number(&mut self) -> i32 {
+    fn parse_number(&mut self) -> String {
         let mut number_str = String::new();
         while self.source[self.index].is_ascii_alphanumeric() {
             number_str.push(self.source[self.index]);
             self.advance();
         }
-        number_str.parse::<i32>().unwrap()
+        number_str
     }
 
     fn parse_identifier(&mut self) -> String {

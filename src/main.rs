@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, ops};
+use std::collections::HashMap;
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
+
+use crate::tokenizer::Precedence;
 
 const PROGRAM_SOURCE: &str = "a = 2
 b = 3
@@ -19,64 +21,6 @@ print \"Hello world\"
 print c, d
 print a + b, c
 ";
-
-#[derive(PartialEq, PartialOrd, Debug)]
-enum Precedence {
-    None,
-    Assignment,     // =
-    Addition,       // + -
-    Multiplication, // * /
-    Unary,          // -n
-    Primary,
-}
-
-impl ops::Add<i32> for Precedence {
-    type Output = Precedence;
-
-    fn add(self, rhs: i32) -> Self::Output {
-        if rhs.abs() != 1 {
-            panic!("Can only increase or decrease Precedence by 1");
-        }
-        if rhs == 1 {
-            match self {
-                Precedence::None => Precedence::Assignment,
-                Precedence::Assignment => Precedence::Addition,
-                Precedence::Addition => Precedence::Multiplication,
-                Precedence::Multiplication => Precedence::Unary,
-                Precedence::Unary => Precedence::Primary,
-                Precedence::Primary => panic!("Trying to increase from highest precedence"),
-            }
-        } else {
-            match self {
-                Precedence::None => panic!("Trying to decrease from lowest precedence"),
-                Precedence::Assignment => Precedence::None,
-                Precedence::Addition => Precedence::Assignment,
-                Precedence::Multiplication => Precedence::Addition,
-                Precedence::Unary => Precedence::Multiplication,
-                Precedence::Primary => Precedence::Unary,
-            }
-        }
-    }
-}
-
-impl From<&Token> for Precedence {
-    fn from(token: &Token) -> Self {
-        match token.r#type {
-            TokenType::Identifier => Precedence::Primary,
-            TokenType::Number => Precedence::Primary,
-            TokenType::String => Precedence::Primary,
-            TokenType::Print => Precedence::None,
-            TokenType::Assignment => Precedence::Assignment,
-            TokenType::Plus => Precedence::Addition,
-            TokenType::Minus => Precedence::Addition,
-            TokenType::Mul => Precedence::Multiplication,
-            TokenType::Div => Precedence::Multiplication,
-            TokenType::Comma => Precedence::None,
-            TokenType::Newline => Precedence::None,
-            TokenType::Eof => Precedence::None,
-        }
-    }
-}
 
 struct Parser {
     tokenizer: Tokenizer,
@@ -134,13 +78,14 @@ impl Parser {
         self.advance();
         loop {
             while self.match_and_advance(TokenType::Newline) {}
-            match self.parse_statement() {
-                Ok(_) => (),
-                Err(e) => panic!("{:?}", e),
-            }
 
             if self.match_and_advance(TokenType::Eof) {
                 break;
+            }
+
+            match self.parse_statement() {
+                Ok(_) => (),
+                Err(e) => panic!("{:?}", e),
             }
         }
     }
@@ -183,7 +128,7 @@ impl Parser {
         self.advance();
         self.expect(TokenType::Assignment, "Expected after identifier")?;
         print!("Assignment of `{}`: ", ident);
-        print!("{}", self.parse_expression(Precedence::Assignment));
+        print!("{}", self.parse_expression(Precedence::Assignment as u32));
         println!();
         self.expect(TokenType::Newline, "")?;
         Ok(())
@@ -192,17 +137,17 @@ impl Parser {
     fn parse_print(&mut self) -> ParserResult {
         assert!(self.match_and_advance(TokenType::Print));
         print!("Print: ");
-        print!("{}", self.parse_expression(Precedence::Assignment));
+        print!("{}", self.parse_expression(Precedence::Assignment as u32));
 
         while self.match_and_advance(TokenType::Comma) {
             print!(", ");
-            print!("{}", self.parse_expression(Precedence::Assignment));
+            print!("{}", self.parse_expression(Precedence::Assignment as u32));
         }
         println!();
         Ok(())
     }
 
-    fn parse_expression(&mut self, precedence: Precedence) -> String {
+    fn parse_expression(&mut self, precedence: u32) -> String {
         // prefix expression
         let mut lhs = match self.current.as_ref().unwrap().r#type {
             TokenType::Identifier | TokenType::Number | TokenType::String => {
@@ -213,9 +158,9 @@ impl Parser {
         self.advance();
 
         // infix expression
-        while precedence < self.current.as_ref().unwrap().into() {
+        while precedence < self.current.as_ref().unwrap().get_precedence() {
             let op = self.current.as_ref().unwrap().clone();
-            let new_precedence: Precedence = self.current.as_ref().unwrap().into();
+            let new_precedence = self.current.as_ref().unwrap().get_precedence();
             self.advance();
             let rhs = self.parse_expression(new_precedence);
             lhs = format!("[{}] {} {}", op, &lhs, &rhs);

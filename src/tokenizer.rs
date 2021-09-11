@@ -24,6 +24,15 @@ pub struct Token {
     pub column: usize,
 }
 
+pub enum Precedence {
+    None,
+    Assignment,     // =
+    Addition,       // + -
+    Multiplication, // * /
+    Unary,          // -n
+    Primary,
+}
+
 impl Token {
     fn new(r#type: TokenType, lexeme: String, line: usize, column: usize) -> Self {
         Token {
@@ -36,6 +45,20 @@ impl Token {
 
     pub fn is_type(&self, other: TokenType) -> bool {
         self.r#type == other
+    }
+
+    pub fn get_precedence(&self) -> u32 {
+        match self.r#type {
+            TokenType::Print | TokenType::Comma | TokenType::Newline | TokenType::Eof => {
+                Precedence::None as u32
+            }
+            TokenType::Assignment => Precedence::Assignment as u32,
+            TokenType::Plus | TokenType::Minus => Precedence::Addition as u32,
+            TokenType::Mul | TokenType::Div => Precedence::Multiplication as u32,
+            TokenType::Identifier | TokenType::Number | TokenType::String => {
+                Precedence::Primary as u32
+            }
+        }
     }
 }
 

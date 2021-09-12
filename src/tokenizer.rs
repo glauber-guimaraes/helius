@@ -47,6 +47,10 @@ impl Token {
         self.r#type == other
     }
 
+    pub fn is_any_type(&self, types: &[TokenType]) -> bool {
+        types.iter().any(|t| self.is_type(*t))
+    }
+
     pub fn get_precedence(&self) -> u32 {
         match self.r#type {
             TokenType::Print | TokenType::Comma | TokenType::Newline | TokenType::Eof => {

@@ -121,15 +121,14 @@ impl Parser {
     }
 
     fn parse_assignment(&mut self) -> ParserResult {
-        let ident = match self.current.as_ref().unwrap().r#type {
-            TokenType::Identifier => self.current.as_ref().unwrap().lexeme.clone(),
-            _ => panic!(),
-        };
-        self.advance();
+        assert!(self.current.as_ref().unwrap().r#type == TokenType::Identifier);
+        let ident = self.consume();
         self.expect(TokenType::Assignment, "Expected after identifier")?;
-        print!("Assignment of `{}`: ", ident);
-        print!("{}", self.parse_expression(Precedence::Assignment as u32));
-        println!();
+        println!(
+            "{} = {}",
+            ident,
+            self.parse_expression(Precedence::Assignment as u32)
+        );
         self.expect(TokenType::Newline, "")?;
         Ok(())
     }
@@ -149,27 +148,23 @@ impl Parser {
 
     fn parse_expression(&mut self, precedence: u32) -> String {
         // prefix expression
-        let mut lhs = match self.current.as_ref().unwrap().r#type {
-            TokenType::Identifier | TokenType::Number | TokenType::String => {
-                format!("{}", self.current.as_ref().unwrap())
-            }
-            _ => panic!("Expected prefix expression, found {:?}", self.current),
-        };
-        self.advance();
+        let lhs = self.consume();
+        if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
+            panic!("Expected prefix expression, found {:?}", self.current);
+        }
+        let mut expression = format!("{}", lhs);
 
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {
-            let op = self.current.as_ref().unwrap().clone();
-            let new_precedence = self.current.as_ref().unwrap().get_precedence();
-            self.advance();
-            let rhs = self.parse_expression(new_precedence);
-            lhs = format!("[{}] {} {}", op, &lhs, &rhs);
+            let op = self.consume();
+            let rhs = self.parse_expression(op.get_precedence());
+            expression = format!("[{}] {} {}", op, &expression, &rhs);
         }
-        lhs
+        expression
     }
 
     fn consume(&mut self) -> Token {
-        let t = self.current.as_ref().unwrap().clone();
+        let t = self.current.to_owned().unwrap();
         self.advance();
         t
     }

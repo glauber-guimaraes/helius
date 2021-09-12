@@ -167,10 +167,8 @@ impl Parser {
         // prefix expression
         let lhs = self.consume();
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
-            return self.create_error_at_token(
-                &lhs,
-                &format!("Expected prefix expression, found {:?}", &lhs),
-            );
+            return self
+                .create_error_at_token(&lhs, &format!("Expected expression, found {:?}", &lhs));
         }
         let mut expression = format!("{}", lhs);
 
@@ -188,7 +186,15 @@ impl Parser {
                     &format!("Expected binary operation, found {:?}", op),
                 );
             }
-            let rhs = self.parse_expression(op.get_precedence())?;
+            let rhs = match self.parse_expression(op.get_precedence()) {
+                Ok(expr) => expr,
+                Err(err) => {
+                    return self.create_error_at_token(
+                        &op,
+                        &format!("{}. Expected after `{}` token.", err.msg, op.lexeme),
+                    );
+                }
+            };
             expression = format!("[{}] {} {}", op, &expression, &rhs);
         }
         Ok(expression)

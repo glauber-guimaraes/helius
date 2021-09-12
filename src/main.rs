@@ -17,10 +17,9 @@ g = 1 * 2 / 3
 print a
 print a, b
 +
-print c, d + 
+print c, d +
 
-print a + b -, c 
-";
+print a + b, c +";
 
 struct Parser {
     tokenizer: Tokenizer,
@@ -168,7 +167,7 @@ impl Parser {
         let lhs = self.consume();
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
             return self
-                .create_error_at_token(&lhs, &format!("Expected expression, found {:?}", &lhs));
+                .create_error_at_token(&lhs, &format!("Expected expression, found `{}`", &lhs));
         }
         let mut expression = format!("{}", lhs);
 

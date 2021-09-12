@@ -75,7 +75,9 @@ impl Display for Token {
             TokenType::Plus | TokenType::Minus | TokenType::Mul | TokenType::Div => {
                 f.write_str(&self.lexeme)
             }
-            _ => f.write_fmt(format_args!("{:?}", self)),
+            TokenType::Newline => f.write_str("\\n"),
+            TokenType::Eof => f.write_str("end of file"),
+            _ => f.write_fmt(format_args!("{}", self.lexeme)),
         }
     }
 }

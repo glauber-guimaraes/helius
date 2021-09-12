@@ -16,8 +16,10 @@ f = c + d * a
 g = 1 * 2 / 3
 print a
 print a, b
-print c, d
-print a + b, c
++
+print c, d + 
+
+print a + b -, c 
 ";
 
 struct Parser {
@@ -83,8 +85,22 @@ impl Parser {
 
             match self.parse_statement() {
                 Ok(_) => (),
-                Err(e) => panic!("{:?}", e),
+                Err(e) => {
+                    println!("\n{}:{}: error: {}\n", e.line, e.column, e.msg);
+                    self.recover_from_error();
+                }
             }
+        }
+    }
+
+    fn recover_from_error(&mut self) {
+        while !self
+            .current
+            .as_ref()
+            .unwrap()
+            .is_any_type(&[TokenType::Newline, TokenType::Eof])
+        {
+            self.consume();
         }
     }
 

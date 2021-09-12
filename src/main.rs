@@ -14,10 +14,8 @@ d = a - b
 e = c * d + a
 f = c + d * a
 g = 1 * 2 / 3
-
 print a
 print a, b
-print \"Hello world\"
 print c, d
 print a + b, c
 ";
@@ -44,7 +42,7 @@ impl ParserError {
     }
 }
 
-type ParserResult = Result<(), ParserError>;
+type ParserResult<T = ()> = Result<T, ParserError>;
 
 impl Parser {
     fn new(tokenizer: Tokenizer) -> Self {
@@ -124,43 +122,60 @@ impl Parser {
         assert!(self.current.as_ref().unwrap().r#type == TokenType::Identifier);
         let ident = self.consume();
         self.expect(TokenType::Assignment, "Expected after identifier")?;
-        println!(
-            "{} = {}",
-            ident,
-            self.parse_expression(Precedence::Assignment as u32)
-        );
-        self.expect(TokenType::Newline, "")?;
+
+        let expression = self.parse_expression(Precedence::Assignment as u32)?;
+        println!("{} = {}", ident, expression);
         Ok(())
     }
 
     fn parse_print(&mut self) -> ParserResult {
         assert!(self.match_and_advance(TokenType::Print));
         print!("Print: ");
-        print!("{}", self.parse_expression(Precedence::Assignment as u32));
+        let expression = self.parse_expression(Precedence::Assignment as u32)?;
+        print!("{}", expression);
 
         while self.match_and_advance(TokenType::Comma) {
             print!(", ");
-            print!("{}", self.parse_expression(Precedence::Assignment as u32));
+            let expression = self.parse_expression(Precedence::Assignment as u32)?;
+            print!("{}", expression);
         }
         println!();
         Ok(())
     }
 
-    fn parse_expression(&mut self, precedence: u32) -> String {
+    fn create_error_at_token<T>(&self, token: &Token, msg: &str) -> ParserResult<T> {
+        Err(ParserError::new(msg, token.line, token.column))
+    }
+
+    fn parse_expression(&mut self, precedence: u32) -> ParserResult<String> {
         // prefix expression
         let lhs = self.consume();
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
-            panic!("Expected prefix expression, found {:?}", self.current);
+            return self.create_error_at_token(
+                &lhs,
+                &format!("Expected prefix expression, found {:?}", &lhs),
+            );
         }
         let mut expression = format!("{}", lhs);
 
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {
             let op = self.consume();
-            let rhs = self.parse_expression(op.get_precedence());
+            if !op.is_any_type(&[
+                TokenType::Plus,
+                TokenType::Minus,
+                TokenType::Mul,
+                TokenType::Div,
+            ]) {
+                return self.create_error_at_token(
+                    &op,
+                    &format!("Expected binary operation, found {:?}", op),
+                );
+            }
+            let rhs = self.parse_expression(op.get_precedence())?;
             expression = format!("[{}] {} {}", op, &expression, &rhs);
         }
-        expression
+        Ok(expression)
     }
 
     fn consume(&mut self) -> Token {

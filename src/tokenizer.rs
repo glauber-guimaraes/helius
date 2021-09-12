@@ -104,7 +104,7 @@ impl Tokenizer {
     }
 
     fn create_token(&self, r#type: TokenType, lexeme: &str) -> Token {
-        Token::new(r#type, lexeme.to_string(), self.line + 1, self.column)
+        Token::new(r#type, lexeme.to_string(), self.line + 1, self.column + 1)
     }
 
     pub fn next(&mut self) -> Result<Token, TokenError> {
@@ -115,33 +115,33 @@ impl Tokenizer {
         let chr = self.source[self.index];
 
         if chr.is_ascii_digit() {
-            let lexeme = self.parse_number();
-            Ok(self.create_token(TokenType::Number, &lexeme))
+            let token = self.parse_number();
+            Ok(token)
         } else if chr.is_ascii_whitespace() && chr == '\n' {
+            let result = self.create_token(TokenType::Newline, "\n");
             self.advance();
-            Ok(self.create_token(TokenType::Newline, "\n"))
+            Ok(result)
         } else if chr.is_ascii_alphabetic() {
-            let ident = self.parse_identifier();
-            if ident == "print" {
-                Ok(self.create_token(TokenType::Print, "print"))
+            let mut token = self.parse_identifier();
+            if token.lexeme == "print" {
+                token.r#type = TokenType::Print;
+                Ok(token)
             } else {
-                Ok(self.create_token(TokenType::Identifier, &ident))
+                Ok(token)
             }
         } else if chr.is_ascii_punctuation() {
-            self.advance();
-            match chr {
+            let result = match chr {
                 '=' => Ok(self.create_token(TokenType::Assignment, "=")),
                 '+' => Ok(self.create_token(TokenType::Plus, "+")),
                 '-' => Ok(self.create_token(TokenType::Minus, "-")),
                 '*' => Ok(self.create_token(TokenType::Mul, "*")),
                 '/' => Ok(self.create_token(TokenType::Div, "/")),
                 ',' => Ok(self.create_token(TokenType::Comma, ",")),
-                '"' => {
-                    let lexeme = self.parse_string();
-                    Ok(self.create_token(TokenType::String, &lexeme))
-                }
+                '"' => Ok(self.parse_string()),
                 _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
-            }
+            };
+            self.advance();
+            result
         } else {
             self.advance();
             self.next()
@@ -159,16 +159,19 @@ impl Tokenizer {
         }
     }
 
-    fn parse_number(&mut self) -> String {
+    fn parse_number(&mut self) -> Token {
+        let mut token = self.create_token(TokenType::Number, "");
         let mut number_str = String::new();
         while self.source[self.index].is_ascii_alphanumeric() {
             number_str.push(self.source[self.index]);
             self.advance();
         }
-        number_str
+        token.lexeme = number_str;
+        token
     }
 
-    fn parse_identifier(&mut self) -> String {
+    fn parse_identifier(&mut self) -> Token {
+        let mut token = self.create_token(TokenType::Identifier, "");
         let mut ident = String::new();
 
         while self.source[self.index].is_ascii_alphanumeric() {
@@ -176,10 +179,13 @@ impl Tokenizer {
             ident.push(chr);
             self.advance();
         }
-        ident
+        token.lexeme = ident;
+        token
     }
 
-    fn parse_string(&mut self) -> String {
+    fn parse_string(&mut self) -> Token {
+        self.advance();
+        let mut token = self.create_token(TokenType::String, "");
         let mut str = String::new();
 
         while self.source[self.index] != '"' {
@@ -188,6 +194,7 @@ impl Tokenizer {
         }
         // Skip the ending `"`
         self.advance();
-        str
+        token.lexeme = str;
+        token
     }
 }

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use core::fmt;
 use std::collections::HashMap;
 
 mod tokenizer;
@@ -180,7 +181,7 @@ impl Parser {
         })
     }
 
-    fn parse_expression(&mut self, precedence: u32) -> ParserResult<String> {
+    fn parse_expression(&mut self, precedence: u32) -> ParserResult<Box<dyn ASTNode>> {
         // prefix expression
         let lhs = self.consume();
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
@@ -190,7 +191,7 @@ impl Parser {
                 "expression should be here",
             );
         }
-        let mut expression = format!("{}", lhs);
+        let mut expr_node: Box<dyn ASTNode> = Box::new(NodeVariant(lhs.into()));
 
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {
@@ -217,9 +218,13 @@ impl Parser {
                     );
                 }
             };
-            expression = format!("[{}] {} {}", op, &expression, &rhs);
+            expr_node = Box::new(NodeBinaryOperation {
+                lhs: expr_node,
+                op: op.lexeme,
+                rhs,
+            });
         }
-        Ok(expression)
+        Ok(expr_node)
     }
 
     fn consume(&mut self) -> Token {
@@ -228,6 +233,30 @@ impl Parser {
         t
     }
 }
+
+trait ASTNode: fmt::Display {}
+
+struct NodeBinaryOperation {
+    lhs: Box<dyn ASTNode>,
+    op: String,
+    rhs: Box<dyn ASTNode>,
+}
+
+impl fmt::Display for NodeBinaryOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("[{}] {} {}", self.op, self.lhs, self.rhs))
+    }
+}
+
+impl ASTNode for NodeBinaryOperation {}
+
+struct NodeVariant(Variant);
+impl fmt::Display for NodeVariant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{:?}", self.0))
+    }
+}
+impl ASTNode for NodeVariant {}
 
 #[derive(Debug, Clone)]
 enum Variant {
@@ -239,9 +268,9 @@ enum Variant {
 impl From<Token> for Variant {
     fn from(token: Token) -> Self {
         match token.r#type {
-            TokenType::Identifier => todo!(),
-            TokenType::Number => todo!(),
-            TokenType::String => todo!(),
+            TokenType::Identifier => Self::Identifier(token.lexeme),
+            TokenType::Number => Self::Number(token.lexeme.parse().unwrap()),
+            TokenType::String => Self::String(token.lexeme),
             _ => panic!("Invalid conversion for token {:?}", token),
         }
     }

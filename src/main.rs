@@ -26,6 +26,7 @@ print a + b, c +";
 struct Parser {
     tokenizer: Tokenizer,
     current: Option<Token>,
+    has_error: bool,
 }
 
 #[derive(Debug)]
@@ -43,6 +44,7 @@ impl Parser {
         Parser {
             tokenizer,
             current: None,
+            has_error: false,
         }
     }
 
@@ -67,6 +69,8 @@ impl Parser {
     }
 
     fn program(&mut self) {
+        let mut statements: Vec<Box<dyn ASTNode>> = vec![];
+
         self.advance();
         loop {
             while self.match_and_advance(TokenType::Newline) {}
@@ -76,30 +80,26 @@ impl Parser {
             }
 
             match self.parse_statement() {
-                Ok(stmt) => println!("{}", stmt),
+                Ok(stmt) => statements.push(stmt),
                 Err(e) => {
-                    println!("\n{}:{}: error: {}", e.line, e.column, e.msg);
-                    println!("  {:1$} |", "", format!("{}", e.line).len());
-                    println!("  {} | {}", e.line, self.tokenizer.get_source_line(e.line));
-                    println!(
-                        "{}^{} {}\n",
-                        format!(
-                            "  {0:1$} | {2:3$}",
-                            "",
-                            format!("{}", e.line).len(),
-                            "",
-                            e.column - 1
-                        ),
-                        if !e.short_msg.is_empty() { "--" } else { "" },
-                        e.short_msg
-                    );
+                    self.print_error(e);
                     self.recover_from_error();
                 }
+            }
+        }
+
+        if self.has_error {
+            println!("error: can't compile program due to previous errors")
+        } else {
+            for stmt in statements {
+                println!("{}", stmt);
             }
         }
     }
 
     fn recover_from_error(&mut self) {
+        self.has_error = true;
+
         while !self
             .current
             .as_ref()
@@ -146,7 +146,6 @@ impl Parser {
         self.expect(TokenType::Assignment, "Expected after identifier")?;
 
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
-        println!("{} = {}", ident, expression);
         Ok(Box::new(NodeAssignment {
             identifier: NodeVariant(ident.into()),
             expression,
@@ -235,6 +234,24 @@ impl Parser {
         let t = self.current.to_owned().unwrap();
         self.advance();
         t
+    }
+
+    fn print_error(&self, e: ParserError) {
+        println!("{}:{}: error: {}", e.line, e.column, e.msg);
+        println!("  {:1$} |", "", format!("{}", e.line).len());
+        println!("  {} | {}", e.line, self.tokenizer.get_source_line(e.line));
+        println!(
+            "{}^{} {}\n",
+            format!(
+                "  {0:1$} | {2:3$}",
+                "",
+                format!("{}", e.line).len(),
+                "",
+                e.column - 1
+            ),
+            if !e.short_msg.is_empty() { "--" } else { "" },
+            e.short_msg
+        );
     }
 }
 

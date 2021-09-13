@@ -76,7 +76,7 @@ impl Parser {
             }
 
             match self.parse_statement() {
-                Ok(_) => (),
+                Ok(stmt) => println!("{}", stmt),
                 Err(e) => {
                     println!("\n{}:{}: error: {}", e.line, e.column, e.msg);
                     println!("  {:1$} |", "", format!("{}", e.line).len());
@@ -125,7 +125,7 @@ impl Parser {
         }
     }
 
-    fn parse_statement(&mut self) -> ParserResult {
+    fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         match self.current.as_ref().unwrap().r#type {
             TokenType::Identifier => self.parse_assignment(),
             TokenType::Print => self.parse_print(),
@@ -140,29 +140,33 @@ impl Parser {
         }
     }
 
-    fn parse_assignment(&mut self) -> ParserResult {
+    fn parse_assignment(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         assert!(self.current.as_ref().unwrap().r#type == TokenType::Identifier);
         let ident = self.consume();
         self.expect(TokenType::Assignment, "Expected after identifier")?;
 
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
         println!("{} = {}", ident, expression);
-        Ok(())
+        Ok(Box::new(NodeAssignment {
+            identifier: NodeVariant(ident.into()),
+            expression,
+        }))
     }
 
-    fn parse_print(&mut self) -> ParserResult {
+    fn parse_print(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         assert!(self.match_and_advance(TokenType::Print));
-        print!("Print: ");
+        let mut node = NodeExpressionList(vec![]);
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
-        print!("{}", expression);
+        node.push(expression);
 
         while self.match_and_advance(TokenType::Comma) {
-            print!(", ");
             let expression = self.parse_expression(Precedence::Assignment as u32)?;
-            print!("{}", expression);
+            node.push(expression);
         }
-        println!();
-        Ok(())
+        Ok(Box::new(NodeCall {
+            func: "print".to_string(),
+            args: node,
+        }))
     }
 
     fn create_error_at_token<T>(
@@ -257,6 +261,50 @@ impl fmt::Display for NodeVariant {
     }
 }
 impl ASTNode for NodeVariant {}
+
+struct NodeExpressionList(Vec<Box<dyn ASTNode>>);
+impl NodeExpressionList {
+    fn push(&mut self, value: Box<dyn ASTNode>) {
+        self.0.push(value)
+    }
+}
+
+impl fmt::Display for NodeExpressionList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let count = self.0.len();
+        for (i, node) in self.0.iter().enumerate() {
+            f.write_fmt(format_args!("{}", node))?;
+            if i < count - 1 {
+                f.write_str(", ")?;
+            }
+        }
+        Ok(())
+    }
+}
+impl ASTNode for NodeExpressionList {}
+
+struct NodeCall {
+    func: String,
+    args: NodeExpressionList,
+}
+impl fmt::Display for NodeCall {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}({})", self.func, self.args))
+    }
+}
+impl ASTNode for NodeCall {}
+
+struct NodeAssignment {
+    identifier: NodeVariant,
+    expression: Box<dyn ASTNode>,
+}
+
+impl fmt::Display for NodeAssignment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{} = {}", self.identifier, self.expression))
+    }
+}
+impl ASTNode for NodeAssignment {}
 
 #[derive(Debug, Clone)]
 enum Variant {

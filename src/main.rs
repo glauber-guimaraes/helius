@@ -35,17 +35,6 @@ struct ParserError {
     column: usize,
 }
 
-impl ParserError {
-    fn new(msg: &str, short_msg: &str, line: usize, column: usize) -> Self {
-        Self {
-            msg: msg.to_string(),
-            short_msg: short_msg.to_string(),
-            line,
-            column,
-        }
-    }
-}
-
 type ParserResult<T = ()> = Result<T, ParserError>;
 
 impl Parser {
@@ -62,7 +51,8 @@ impl Parser {
 
     fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult {
         if !self.match_and_advance(token_type) {
-            return Err(ParserError::new(
+            return self.create_error_at_token(
+                self.current.as_ref().unwrap(),
                 &format!(
                     "Expected token {:?} got {:?}\n{}",
                     token_type,
@@ -70,9 +60,7 @@ impl Parser {
                     msg
                 ),
                 "expected here",
-                self.current.as_ref().unwrap().line,
-                self.current.as_ref().unwrap().column,
-            ));
+            );
         }
         Ok(())
     }
@@ -140,15 +128,14 @@ impl Parser {
         match self.current.as_ref().unwrap().r#type {
             TokenType::Identifier => self.parse_assignment(),
             TokenType::Print => self.parse_print(),
-            _ => Err(ParserError::new(
+            _ => self.create_error_at_token(
+                self.current.as_ref().unwrap(),
                 &format!(
                     "Unexpected statement start `{}`",
                     &self.current.as_ref().unwrap()
                 ),
                 "",
-                self.current.as_ref().unwrap().line,
-                self.current.as_ref().unwrap().column,
-            )),
+            ),
         }
     }
 
@@ -183,7 +170,14 @@ impl Parser {
         msg: &str,
         short_msg: &str,
     ) -> ParserResult<T> {
-        Err(ParserError::new(msg, short_msg, token.line, token.column))
+        Err({
+            ParserError {
+                msg: msg.to_string(),
+                short_msg: short_msg.to_string(),
+                line: token.line,
+                column: token.column,
+            }
+        })
     }
 
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<String> {

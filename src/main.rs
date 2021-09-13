@@ -11,7 +11,8 @@ const PROGRAM_SOURCE: &str = "a = 2
 b = 3
 c = a + b
 d = a - b
-e = c * d + a
+# line comment
+e = c * d + a # mid-line comment
 f = c + d * a
 g = 1 * 2 / 3
 print a

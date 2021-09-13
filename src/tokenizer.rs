@@ -127,10 +127,8 @@ impl Tokenizer {
             let mut token = self.parse_identifier();
             if token.lexeme == "print" {
                 token.r#type = TokenType::Print;
-                Ok(token)
-            } else {
-                Ok(token)
             }
+            Ok(token)
         } else if chr.is_ascii_punctuation() {
             let result = match chr {
                 '=' => Ok(self.create_token(TokenType::Assignment, "=")),
@@ -140,6 +138,10 @@ impl Tokenizer {
                 '/' => Ok(self.create_token(TokenType::Div, "/")),
                 ',' => Ok(self.create_token(TokenType::Comma, ",")),
                 '"' => Ok(self.parse_string()),
+                '#' => {
+                    self.consume_comment();
+                    return self.next();
+                }
                 _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
             };
             self.advance();
@@ -198,5 +200,11 @@ impl Tokenizer {
         self.advance();
         token.lexeme = str;
         token
+    }
+
+    fn consume_comment(&mut self) {
+        while self.source[self.index] != '\n' {
+            self.advance();
+        }
     }
 }

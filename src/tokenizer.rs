@@ -207,4 +207,15 @@ impl Tokenizer {
             self.advance();
         }
     }
+
+    pub fn get_source_line(&self, line: usize) -> String {
+        self.source
+            .iter()
+            .collect::<String>()
+            .split('\n')
+            .into_iter()
+            .nth(line - 1)
+            .unwrap()
+            .to_string()
+    }
 }

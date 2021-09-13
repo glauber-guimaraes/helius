@@ -30,14 +30,16 @@ struct Parser {
 #[derive(Debug)]
 struct ParserError {
     msg: String,
+    short_msg: String,
     line: usize,
     column: usize,
 }
 
 impl ParserError {
-    fn new(msg: &str, line: usize, column: usize) -> Self {
+    fn new(msg: &str, short_msg: &str, line: usize, column: usize) -> Self {
         Self {
             msg: msg.to_string(),
+            short_msg: short_msg.to_string(),
             line,
             column,
         }
@@ -67,6 +69,7 @@ impl Parser {
                     self.current.as_ref().unwrap(),
                     msg
                 ),
+                "expected here",
                 self.current.as_ref().unwrap().line,
                 self.current.as_ref().unwrap().column,
             ));
@@ -86,7 +89,21 @@ impl Parser {
             match self.parse_statement() {
                 Ok(_) => (),
                 Err(e) => {
-                    println!("\n{}:{}: error: {}\n", e.line, e.column, e.msg);
+                    println!("\n{}:{}: error: {}", e.line, e.column, e.msg);
+                    println!("  {:1$} |", "", format!("{}", e.line).len());
+                    println!("  {} | {}", e.line, self.tokenizer.get_source_line(e.line));
+                    println!(
+                        "{}^{} {}\n",
+                        format!(
+                            "  {0:1$} | {2:3$}",
+                            "",
+                            format!("{}", e.line).len(),
+                            "",
+                            e.column - 1
+                        ),
+                        if !e.short_msg.is_empty() { "--" } else { "" },
+                        e.short_msg
+                    );
                     self.recover_from_error();
                 }
             }
@@ -128,6 +145,7 @@ impl Parser {
                     "Unexpected statement start `{}`",
                     &self.current.as_ref().unwrap()
                 ),
+                "",
                 self.current.as_ref().unwrap().line,
                 self.current.as_ref().unwrap().column,
             )),
@@ -159,16 +177,24 @@ impl Parser {
         Ok(())
     }
 
-    fn create_error_at_token<T>(&self, token: &Token, msg: &str) -> ParserResult<T> {
-        Err(ParserError::new(msg, token.line, token.column))
+    fn create_error_at_token<T>(
+        &self,
+        token: &Token,
+        msg: &str,
+        short_msg: &str,
+    ) -> ParserResult<T> {
+        Err(ParserError::new(msg, short_msg, token.line, token.column))
     }
 
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<String> {
         // prefix expression
         let lhs = self.consume();
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
-            return self
-                .create_error_at_token(&lhs, &format!("Expected expression, found `{}`", &lhs));
+            return self.create_error_at_token(
+                &lhs,
+                &format!("Expected expression, found `{}`", &lhs),
+                "expression should be here",
+            );
         }
         let mut expression = format!("{}", lhs);
 
@@ -184,6 +210,7 @@ impl Parser {
                 return self.create_error_at_token(
                     &op,
                     &format!("Expected binary operation, found {:?}", op),
+                    "",
                 );
             }
             let rhs = match self.parse_expression(op.get_precedence()) {
@@ -192,6 +219,7 @@ impl Parser {
                     return self.create_error_at_token(
                         &op,
                         &format!("{}. Expected after `{}` token.", err.msg, op.lexeme),
+                        "after this",
                     );
                 }
             };

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::collections::HashMap;
+use std::{collections::HashMap, ops};
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
@@ -11,7 +11,9 @@ use crate::tokenizer::Precedence;
 const PROGRAM_SOURCE: &str = "a = 2
 b = 3
 c = a + b
+print c
 d = a - b
+print d
 # line comment
 e = c * d + a # mid-line comment
 f = c + d * a
@@ -19,6 +21,7 @@ g = 1 * 2 / 3
 print a
 print a, b
 print c, d 
+print \"Hello world\"
 print a + b, c ";
 
 struct Parser {
@@ -46,8 +49,8 @@ impl Parser {
         }
     }
 
-    fn parse(&mut self) {
-        self.program();
+    fn parse(&mut self) -> Vec<Box<dyn ASTNode>> {
+        self.program()
     }
 
     fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult {
@@ -66,7 +69,7 @@ impl Parser {
         Ok(())
     }
 
-    fn program(&mut self) {
+    fn program(&mut self) -> Vec<Box<dyn ASTNode>> {
         let mut statements: Vec<Box<dyn ASTNode>> = vec![];
 
         self.advance();
@@ -89,10 +92,12 @@ impl Parser {
         if self.has_error {
             println!("error: can't compile program due to previous errors")
         } else {
-            for stmt in statements {
+            for stmt in statements.iter() {
                 println!("{}", stmt);
             }
         }
+
+        statements
     }
 
     fn recover_from_error(&mut self) {
@@ -253,7 +258,9 @@ impl Parser {
     }
 }
 
-trait ASTNode: fmt::Display {}
+trait ASTNode: fmt::Display {
+    fn execute(&self, context: &mut ExecutionContext);
+}
 
 struct NodeBinaryOperation {
     lhs: Box<dyn ASTNode>,
@@ -267,7 +274,21 @@ impl fmt::Display for NodeBinaryOperation {
     }
 }
 
-impl ASTNode for NodeBinaryOperation {}
+impl ASTNode for NodeBinaryOperation {
+    fn execute(&self, context: &mut ExecutionContext) {
+        self.lhs.execute(context);
+        self.rhs.execute(context);
+        let rhs = context.pop();
+        let lhs = context.pop();
+        match self.op.as_str() {
+            "+" => context.push(lhs + rhs),
+            "-" => context.push(lhs - rhs),
+            "*" => context.push(lhs * rhs),
+            "/" => context.push(lhs / rhs),
+            _ => panic!("RuntimeError: invalid operand {}", self.op),
+        }
+    }
+}
 
 struct NodeVariant(Variant);
 impl fmt::Display for NodeVariant {
@@ -275,7 +296,16 @@ impl fmt::Display for NodeVariant {
         f.write_fmt(format_args!("{:?}", self.0))
     }
 }
-impl ASTNode for NodeVariant {}
+impl ASTNode for NodeVariant {
+    fn execute(&self, context: &mut ExecutionContext) {
+        match &self.0 {
+            Variant::Identifier(ident) => {
+                context.push(context.variable_lookup(&ident).unwrap().clone())
+            }
+            _ => context.push(self.0.clone()),
+        }
+    }
+}
 
 struct NodeExpressionList(Vec<Box<dyn ASTNode>>);
 impl NodeExpressionList {
@@ -296,7 +326,13 @@ impl fmt::Display for NodeExpressionList {
         Ok(())
     }
 }
-impl ASTNode for NodeExpressionList {}
+impl ASTNode for NodeExpressionList {
+    fn execute(&self, context: &mut ExecutionContext) {
+        for expr in &self.0 {
+            expr.execute(context);
+        }
+    }
+}
 
 struct NodeCall {
     func: String,
@@ -307,7 +343,20 @@ impl fmt::Display for NodeCall {
         f.write_fmt(format_args!("{}({})", self.func, self.args))
     }
 }
-impl ASTNode for NodeCall {}
+impl ASTNode for NodeCall {
+    fn execute(&self, context: &mut ExecutionContext) {
+        // Assume print for now.
+        self.args.execute(context);
+        let mut args = vec![];
+        for _ in 0..self.args.0.len() {
+            args.push(context.pop());
+        }
+        for arg in args.iter().rev() {
+            print!("{} ", arg);
+        }
+        println!();
+    }
+}
 
 struct NodeAssignment {
     identifier: NodeVariant,
@@ -319,13 +368,31 @@ impl fmt::Display for NodeAssignment {
         f.write_fmt(format_args!("{} = {}", self.identifier, self.expression))
     }
 }
-impl ASTNode for NodeAssignment {}
+impl ASTNode for NodeAssignment {
+    fn execute(&self, context: &mut ExecutionContext) {
+        self.expression.execute(context);
+        let value = context.pop();
+        if let Variant::Identifier(identifier) = &self.identifier.0 {
+            context.variable_set(identifier, value);
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 enum Variant {
     Identifier(String),
     String(String),
     Number(i32),
+}
+
+impl fmt::Display for Variant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Variant::Identifier(ident) => f.write_fmt(format_args!("{}", ident)),
+            Variant::String(s) => f.write_fmt(format_args!("{}", s)),
+            Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
+        }
+    }
 }
 
 impl From<Token> for Variant {
@@ -339,6 +406,86 @@ impl From<Token> for Variant {
     }
 }
 
+impl ops::Add for Variant {
+    type Output = Variant;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
+            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
+        }
+
+        if let Variant::Number(lhs) = self {
+            if let Variant::Number(rhs) = rhs {
+                Variant::Number(lhs + rhs)
+            } else {
+                panic!("unreachable");
+            }
+        } else {
+            panic!("unreachable");
+        }
+    }
+}
+
+impl ops::Sub for Variant {
+    type Output = Variant;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
+            panic!("RuntimeError: cannot subtract {:?} and {:?}", self, rhs);
+        }
+
+        if let Variant::Number(lhs) = self {
+            if let Variant::Number(rhs) = rhs {
+                Variant::Number(lhs - rhs)
+            } else {
+                panic!("unreachable");
+            }
+        } else {
+            panic!("unreachable");
+        }
+    }
+}
+
+impl ops::Mul for Variant {
+    type Output = Variant;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
+            panic!("RuntimeError: cannot multiply {:?} and {:?}", self, rhs);
+        }
+
+        if let Variant::Number(lhs) = self {
+            if let Variant::Number(rhs) = rhs {
+                Variant::Number(lhs * rhs)
+            } else {
+                panic!("unreachable");
+            }
+        } else {
+            panic!("unreachable");
+        }
+    }
+}
+
+impl ops::Div for Variant {
+    type Output = Variant;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
+            panic!("RuntimeError: cannot divide {:?} and {:?}", self, rhs);
+        }
+
+        if let Variant::Number(lhs) = self {
+            if let Variant::Number(rhs) = rhs {
+                Variant::Number(lhs / rhs)
+            } else {
+                panic!("unreachable");
+            }
+        } else {
+            panic!("unreachable");
+        }
+    }
+}
+
 #[derive(Default)]
 struct ExecutionContext {
     variables: HashMap<String, Variant>,
@@ -348,6 +495,10 @@ struct ExecutionContext {
 impl ExecutionContext {
     fn push(&mut self, value: Variant) {
         self.stack.push(value);
+    }
+
+    fn pop(&mut self) -> Variant {
+        self.stack.pop().unwrap()
     }
 
     fn variable_lookup(&self, name: &str) -> Option<&Variant> {
@@ -373,5 +524,13 @@ fn main() {
     let tokenizer = Tokenizer::new(PROGRAM_SOURCE.to_owned());
     let mut parser = Parser::new(tokenizer);
 
-    parser.parse();
+    let program = parser.parse();
+    let mut context = ExecutionContext {
+        variables: HashMap::new(),
+        stack: vec![],
+    };
+
+    for stmt in program {
+        stmt.execute(&mut context);
+    }
 }

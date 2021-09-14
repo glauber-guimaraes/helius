@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::{collections::HashMap, ops};
+use std::{collections::HashMap, ops, process};
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
@@ -90,11 +90,8 @@ impl Parser {
         }
 
         if self.has_error {
-            println!("error: can't compile program due to previous errors")
-        } else {
-            for stmt in statements.iter() {
-                println!("{}", stmt);
-            }
+            println!("error: can't compile program due to previous errors");
+            process::exit(1);
         }
 
         statements

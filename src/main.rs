@@ -1,28 +1,12 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::{collections::HashMap, ops, process};
+use std::{collections::HashMap, env, fs, ops, process};
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
 
 use crate::tokenizer::Precedence;
-
-const PROGRAM_SOURCE: &str = "a = 2
-b = 3
-c = a + b
-print c
-d = a - b
-print d
-# line comment
-e = c * d + a # mid-line comment
-f = c + d * a
-g = 1 * 2 / 3
-print a
-print a, b
-print c, d 
-print \"Hello world\"
-print a + b, c ";
 
 struct Parser {
     tokenizer: Tokenizer,
@@ -517,8 +501,31 @@ impl CompilationUnit for Variant {
     }
 }
 
+fn show_usage(program_name: &str, error_msg: &str) {
+    println!("usage: {} file_name", program_name);
+    println!("error: {}", error_msg)
+}
+
 fn main() {
-    let tokenizer = Tokenizer::new(PROGRAM_SOURCE.to_owned());
+    let args: Vec<String> = env::args().collect();
+    let program_name = &args[0];
+    if args.len() != 2 {
+        show_usage(program_name, "file_name is required");
+        process::exit(1);
+    }
+
+    let file_name = &args[1];
+    let file_contents = match fs::read(file_name) {
+        Ok(contents) => contents,
+        Err(err) => {
+            show_usage(&program_name, &format!("{}", err));
+            process::exit(1);
+        }
+    };
+
+    let program_source = String::from_utf8_lossy(&file_contents).to_string();
+
+    let tokenizer = Tokenizer::new(program_source);
     let mut parser = Parser::new(tokenizer);
 
     let program = parser.parse();

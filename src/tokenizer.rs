@@ -153,6 +153,10 @@ impl Tokenizer {
     }
 
     fn advance(&mut self) {
+        if self.index >= self.source.len() {
+            return;
+        }
+
         let chr = self.source[self.index];
         self.index += 1;
         self.column += 1;

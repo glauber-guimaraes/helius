@@ -227,3 +227,36 @@ impl Tokenizer {
             .to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenizer_returns_number() {
+        let program = r#"1"#;
+        test_tokenizer_returns_correct_type(program, TokenType::Number);
+        test_tokenizer_returns_correct_lexeme(program, "1");
+    }
+
+    #[test]
+    fn tokenizer_returns_string() {
+        let program = r#""hello world""#;
+        test_tokenizer_returns_correct_type(program, TokenType::String);
+        test_tokenizer_returns_correct_lexeme(program, "hello world");
+    }
+
+    fn test_tokenizer_returns_correct_type(program: &str, expected_type: TokenType) {
+        let mut tokenizer = Tokenizer::new(program.to_string());
+        let token = tokenizer.next().unwrap();
+
+        assert_eq!(token.r#type, expected_type);
+    }
+
+    fn test_tokenizer_returns_correct_lexeme(program: &str, expected: &str) {
+        let mut tokenizer = Tokenizer::new(program.to_string());
+        let token = tokenizer.next().unwrap();
+
+        assert_eq!(token.lexeme, expected);
+    }
+}

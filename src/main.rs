@@ -171,6 +171,15 @@ impl Parser {
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<Box<dyn ASTNode>> {
         // prefix expression
         let lhs = self.consume();
+
+        // check for unary operator
+        if lhs.is_type(TokenType::Minus) {
+            return Ok(Box::new(NodeUnaryOperation {
+                op: "-".to_string(),
+                rhs: self.parse_expression(Precedence::Unary as u32).unwrap(),
+            }));
+        }
+
         if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
             return self.create_error_at_token(
                 &lhs,
@@ -178,6 +187,7 @@ impl Parser {
                 "expression should be here",
             );
         }
+
         let mut expr_node: Box<dyn ASTNode> = Box::new(NodeVariant(lhs.into()));
 
         // infix expression
@@ -241,6 +251,28 @@ impl Parser {
 
 trait ASTNode: fmt::Display {
     fn execute(&self, context: &mut ExecutionContext);
+}
+
+struct NodeUnaryOperation {
+    op: String,
+    rhs: Box<dyn ASTNode>,
+}
+
+impl fmt::Display for NodeUnaryOperation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("[{}] {}", self.op, self.rhs))
+    }
+}
+
+impl ASTNode for NodeUnaryOperation {
+    fn execute(&self, context: &mut ExecutionContext) {
+        self.rhs.execute(context);
+        let rhs = context.pop();
+        match self.op.as_str() {
+            "-" => context.push(-rhs),
+            _ => panic!("RuntimeError: invalid unary operand {}", self.op),
+        }
+    }
 }
 
 struct NodeBinaryOperation {
@@ -463,6 +495,21 @@ impl ops::Div for Variant {
             }
         } else {
             panic!("unreachable");
+        }
+    }
+}
+
+impl ops::Neg for Variant {
+    type Output = Variant;
+
+    fn neg(self) -> Self::Output {
+        if let Variant::Number(n) = self {
+            Variant::Number(-n)
+        } else {
+            panic!(
+                "RuntimeError: cannot apply unary operator `-` to {:?}",
+                self
+            );
         }
     }
 }

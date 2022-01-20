@@ -167,10 +167,14 @@ impl Tokenizer {
         }
     }
 
+    fn is_eof(&self) -> bool {
+        self.index >= self.source.len()
+    }
+
     fn parse_number(&mut self) -> Token {
         let mut token = self.create_token(TokenType::Number, "");
         let mut number_str = String::new();
-        while self.source[self.index].is_ascii_alphanumeric() {
+        while !self.is_eof() && self.source[self.index].is_ascii_alphanumeric() {
             number_str.push(self.source[self.index]);
             self.advance();
         }
@@ -182,7 +186,7 @@ impl Tokenizer {
         let mut token = self.create_token(TokenType::Identifier, "");
         let mut ident = String::new();
 
-        while self.source[self.index].is_ascii_alphanumeric() {
+        while !self.is_eof() && self.source[self.index].is_ascii_alphanumeric() {
             let chr = self.source[self.index];
             ident.push(chr);
             self.advance();

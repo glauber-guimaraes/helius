@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::{collections::HashMap, env, fs, ops, process};
+use std::{cmp, collections::HashMap, env, fs, ops, process};
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
@@ -198,6 +198,12 @@ impl Parser {
                 TokenType::Minus,
                 TokenType::Mul,
                 TokenType::Div,
+                TokenType::GreaterThan,
+                TokenType::GreaterOrEqualThan,
+                TokenType::LowerThan,
+                TokenType::LowerOrEqualThan,
+                TokenType::Equality,
+                TokenType::Inequality,
             ]) {
                 return self.create_error_at_token(
                     &op,
@@ -298,6 +304,12 @@ impl ASTNode for NodeBinaryOperation {
             "-" => context.push(lhs - rhs),
             "*" => context.push(lhs * rhs),
             "/" => context.push(lhs / rhs),
+            ">" => context.push(Variant::Boolean(lhs > rhs)),
+            ">=" => context.push(Variant::Boolean(lhs >= rhs)),
+            "<" => context.push(Variant::Boolean(lhs < rhs)),
+            "<=" => context.push(Variant::Boolean(lhs <= rhs)),
+            "==" => context.push(Variant::Boolean(lhs == rhs)),
+            "!=" => context.push(Variant::Boolean(lhs != rhs)),
             _ => panic!("RuntimeError: invalid operand {}", self.op),
         }
     }
@@ -396,6 +408,7 @@ enum Variant {
     Identifier(String),
     String(String),
     Number(i32),
+    Boolean(bool),
 }
 
 impl fmt::Display for Variant {
@@ -404,6 +417,7 @@ impl fmt::Display for Variant {
             Variant::Identifier(ident) => f.write_fmt(format_args!("{}", ident)),
             Variant::String(s) => f.write_fmt(format_args!("{}", s)),
             Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
+            Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
         }
     }
 }
@@ -415,6 +429,26 @@ impl From<Token> for Variant {
             TokenType::Number => Self::Number(token.lexeme.parse().unwrap()),
             TokenType::String => Self::String(token.lexeme),
             _ => panic!("Invalid conversion for token {:?}", token),
+        }
+    }
+}
+
+impl cmp::PartialEq for Variant {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::String(l0), Self::String(r0)) => l0 == r0,
+            (Self::Number(l0), Self::Number(r0)) => l0 == r0,
+            (Self::Boolean(b0), Self::Boolean(b1)) => b0 == b1,
+            _ => panic!("RuntimeError: cannot compare {:?} and {:?}", self, other),
+        }
+    }
+}
+
+impl cmp::PartialOrd for Variant {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        match (self, other) {
+            (Variant::Number(n1), Variant::Number(n2)) => n1.partial_cmp(n2),
+            _ => panic!("RuntimeError: cannot compare {:?} and {:?}", self, other),
         }
     }
 }

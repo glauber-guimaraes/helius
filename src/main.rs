@@ -330,7 +330,7 @@ impl ASTNode for NodeVariant {
     fn execute(&self, context: &mut ExecutionContext) {
         match &self.0 {
             Variant::Identifier(ident) => {
-                context.push(context.variable_lookup(&ident).unwrap().clone())
+                context.push(context.variable_lookup(ident).unwrap().clone())
             }
             _ => context.push(self.0.clone()),
         }

@@ -144,12 +144,12 @@ impl Tokenizer {
             Ok(token)
         } else if chr.is_ascii_punctuation() {
             let result = match chr {
-                '=' => Ok(self.create_token(TokenType::Assignment, "=")),
                 '+' => Ok(self.create_token(TokenType::Plus, "+")),
                 '-' => Ok(self.create_token(TokenType::Minus, "-")),
                 '*' => Ok(self.create_token(TokenType::Mul, "*")),
                 '/' => Ok(self.create_token(TokenType::Div, "/")),
                 ',' => Ok(self.create_token(TokenType::Comma, ",")),
+                '<' | '>' | '=' | '!' => self.parse_relational_token(chr),
                 '"' => Ok(self.parse_string()),
                 '#' => {
                     self.consume_comment();
@@ -162,6 +162,28 @@ impl Tokenizer {
         } else {
             self.advance();
             self.next()
+        }
+    }
+
+    fn parse_relational_token(&mut self, start_char: char) -> Result<Token, TokenError> {
+        self.advance();
+
+        if !self.is_eof() && self.source[self.index] == '=' {
+            return match start_char {
+                '>' => Ok(self.create_token(TokenType::GreaterOrEqualThan, ">=")),
+                '<' => Ok(self.create_token(TokenType::LowerOrEqualThan, "<=")),
+                '=' => Ok(self.create_token(TokenType::Equality, "==")),
+                '!' => Ok(self.create_token(TokenType::Inequality, "!=")),
+                _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
+            };
+        }
+
+        match start_char {
+            '>' => Ok(self.create_token(TokenType::GreaterThan, ">")),
+            '<' => Ok(self.create_token(TokenType::LowerThan, "<")),
+            '=' => Ok(self.create_token(TokenType::Assignment, "=")),
+            '!' => Err(TokenError::UndefinedCharacter(self.line, self.column)),
+            _ => unreachable!(),
         }
     }
 

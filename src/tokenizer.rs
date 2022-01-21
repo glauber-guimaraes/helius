@@ -11,6 +11,12 @@ pub enum TokenType {
     Minus,
     Mul,
     Div,
+    LowerThan,
+    LowerOrEqualThan,
+    GreaterThan,
+    GreaterOrEqualThan,
+    Equality,
+    Inequality,
     Comma,
     Newline,
     Eof,
@@ -27,6 +33,7 @@ pub struct Token {
 pub enum Precedence {
     None,
     Assignment,     // =
+    Relational,     // < > <= >= == !=
     Addition,       // + -
     Multiplication, // * /
     Unary,          // -n
@@ -59,6 +66,12 @@ impl Token {
             TokenType::Assignment => Precedence::Assignment as u32,
             TokenType::Plus | TokenType::Minus => Precedence::Addition as u32,
             TokenType::Mul | TokenType::Div => Precedence::Multiplication as u32,
+            TokenType::GreaterThan
+            | TokenType::GreaterOrEqualThan
+            | TokenType::LowerThan
+            | TokenType::LowerOrEqualThan
+            | TokenType::Equality
+            | TokenType::Inequality => Precedence::Relational as u32,
             TokenType::Identifier | TokenType::Number | TokenType::String => {
                 Precedence::Primary as u32
             }

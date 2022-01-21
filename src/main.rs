@@ -533,7 +533,7 @@ fn main() {
     let file_contents = match fs::read(file_name) {
         Ok(contents) => contents,
         Err(err) => {
-            show_usage(&program_name, &format!("{}", err));
+            show_usage(program_name, &format!("{}", err));
             process::exit(1);
         }
     };

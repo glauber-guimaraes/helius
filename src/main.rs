@@ -423,18 +423,10 @@ impl ops::Add for Variant {
     type Output = Variant;
 
     fn add(self, rhs: Self) -> Self::Output {
-        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
-            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
-        }
-
-        if let Variant::Number(lhs) = self {
-            if let Variant::Number(rhs) = rhs {
-                Variant::Number(lhs + rhs)
-            } else {
-                panic!("unreachable");
-            }
+        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
+            Variant::Number(*lhs + *rhs)
         } else {
-            panic!("unreachable");
+            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
         }
     }
 }
@@ -443,18 +435,10 @@ impl ops::Sub for Variant {
     type Output = Variant;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
-            panic!("RuntimeError: cannot subtract {:?} and {:?}", self, rhs);
-        }
-
-        if let Variant::Number(lhs) = self {
-            if let Variant::Number(rhs) = rhs {
-                Variant::Number(lhs - rhs)
-            } else {
-                panic!("unreachable");
-            }
+        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
+            Variant::Number(*lhs - *rhs)
         } else {
-            panic!("unreachable");
+            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
         }
     }
 }
@@ -463,18 +447,10 @@ impl ops::Mul for Variant {
     type Output = Variant;
 
     fn mul(self, rhs: Self) -> Self::Output {
-        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
-            panic!("RuntimeError: cannot multiply {:?} and {:?}", self, rhs);
-        }
-
-        if let Variant::Number(lhs) = self {
-            if let Variant::Number(rhs) = rhs {
-                Variant::Number(lhs * rhs)
-            } else {
-                panic!("unreachable");
-            }
+        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
+            Variant::Number(*lhs * *rhs)
         } else {
-            panic!("unreachable");
+            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
         }
     }
 }
@@ -483,18 +459,10 @@ impl ops::Div for Variant {
     type Output = Variant;
 
     fn div(self, rhs: Self) -> Self::Output {
-        if !matches!(&self, Variant::Number(_)) || !matches!(&rhs, &Variant::Number(_)) {
-            panic!("RuntimeError: cannot divide {:?} and {:?}", self, rhs);
-        }
-
-        if let Variant::Number(lhs) = self {
-            if let Variant::Number(rhs) = rhs {
-                Variant::Number(lhs / rhs)
-            } else {
-                panic!("unreachable");
-            }
+        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
+            Variant::Number(*lhs / *rhs)
         } else {
-            panic!("unreachable");
+            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
         }
     }
 }

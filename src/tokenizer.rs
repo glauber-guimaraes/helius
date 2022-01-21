@@ -5,6 +5,7 @@ pub enum TokenType {
     Identifier,
     Number,
     String,
+    Boolean,
     Print,
     Assignment,
     Plus,
@@ -72,7 +73,7 @@ impl Token {
             | TokenType::LowerOrEqualThan
             | TokenType::Equality
             | TokenType::Inequality => Precedence::Relational as u32,
-            TokenType::Identifier | TokenType::Number | TokenType::String => {
+            TokenType::Identifier | TokenType::Number | TokenType::String | TokenType::Boolean => {
                 Precedence::Primary as u32
             }
         }
@@ -140,6 +141,8 @@ impl Tokenizer {
             let mut token = self.parse_identifier();
             if token.lexeme == "print" {
                 token.r#type = TokenType::Print;
+            } else if token.lexeme == "true" || token.lexeme == "false" {
+                token.r#type = TokenType::Boolean
             }
             Ok(token)
         } else if chr.is_ascii_punctuation() {

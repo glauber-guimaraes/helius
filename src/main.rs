@@ -180,7 +180,12 @@ impl Parser {
             }));
         }
 
-        if !lhs.is_any_type(&[TokenType::Identifier, TokenType::Number, TokenType::String]) {
+        if !lhs.is_any_type(&[
+            TokenType::Identifier,
+            TokenType::Number,
+            TokenType::String,
+            TokenType::Boolean,
+        ]) {
             return self.create_error_at_token(
                 &lhs,
                 &format!("Expected expression, found `{}`", &lhs),
@@ -428,6 +433,7 @@ impl From<Token> for Variant {
             TokenType::Identifier => Self::Identifier(token.lexeme),
             TokenType::Number => Self::Number(token.lexeme.parse().unwrap()),
             TokenType::String => Self::String(token.lexeme),
+            TokenType::Boolean => Self::Boolean(token.lexeme == "true"),
             _ => panic!("Invalid conversion for token {:?}", token),
         }
     }

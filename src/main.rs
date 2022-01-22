@@ -5,7 +5,9 @@ use std::{
     cmp,
     collections::HashMap,
     env::{self},
-    fs, ops, process,
+    fs,
+    ops::{self, Deref},
+    process,
 };
 
 mod tokenizer;
@@ -436,6 +438,15 @@ mod helius_std {
         println!();
         Vec::new()
     }
+
+    pub fn assert(args: Vec<Variant>) -> Vec<Variant> {
+        if args.len() != 1 {
+            panic!("assert() expects only 1 argument");
+        }
+
+        assert!(args[0].is_true());
+        Vec::new()
+    }
 }
 
 struct NodeAssignment {
@@ -458,12 +469,48 @@ impl ASTNode for NodeAssignment {
     }
 }
 
+#[derive(Clone)]
+pub struct NativeFunction {
+    name: String,
+    func: &'static dyn Fn(Vec<Variant>) -> Vec<Variant>,
+}
+
+impl std::fmt::Debug for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&format!("<NativeFunction::{}>", self.name))
+    }
+}
+
+impl Deref for NativeFunction {
+    type Target = &'static dyn Fn(Vec<Variant>) -> Vec<Variant>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.func
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Variant {
     Identifier(String),
     String(String),
     Number(i32),
     Boolean(bool),
+    NativeFunction(NativeFunction),
+}
+
+impl Variant {
+    fn is_true(&self) -> bool {
+        match self {
+            Variant::String(s) => !s.is_empty(),
+            Variant::Number(n) => *n != 0,
+            Variant::Boolean(b) => *b,
+            _ => true,
+        }
+    }
+
+    fn is_false(&self) -> bool {
+        !self.is_true()
+    }
 }
 
 impl fmt::Display for Variant {
@@ -473,6 +520,7 @@ impl fmt::Display for Variant {
             Variant::String(s) => f.write_fmt(format_args!("{}", s)),
             Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
             Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
+            Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
         }
     }
 }
@@ -576,7 +624,6 @@ impl ops::Neg for Variant {
 struct ExecutionContext {
     variables: HashMap<String, Variant>,
     stack: Vec<Variant>,
-    native_functions: HashMap<String, Box<&'static dyn Fn(Vec<Variant>) -> Vec<Variant>>>,
 }
 
 impl ExecutionContext {
@@ -600,15 +647,21 @@ impl ExecutionContext {
     where
         F: Fn(Vec<Variant>) -> Vec<Variant>,
     {
-        self.native_functions
-            .insert(name.to_owned(), Box::new(func));
+        self.variable_set(
+            name,
+            Variant::NativeFunction(NativeFunction {
+                name: name.to_owned(),
+                func,
+            }),
+        );
     }
 
     fn call_native_function(&mut self, name: &str, args: Vec<Variant>) {
-        let f = match self.native_functions.get(name) {
-            Some(f) => f,
-            None => panic!("Trying to call non existent function"),
+        let f = match self.variable_lookup(name) {
+            Some(Variant::NativeFunction(f)) => f,
+            _ => panic!("Trying to call non existent function"),
         };
+
         let results = f(args);
         for result in results.into_iter().rev() {
             self.push(result);
@@ -657,10 +710,10 @@ fn main() {
     let mut context = ExecutionContext {
         variables: HashMap::new(),
         stack: vec![],
-        native_functions: HashMap::new(),
     };
 
     context.add_native_function("print", &helius_std::print);
+    context.add_native_function("assert", &helius_std::assert);
 
     for stmt in program {
         stmt.execute(&mut context);

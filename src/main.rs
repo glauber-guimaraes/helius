@@ -2,18 +2,16 @@
 
 use core::fmt;
 use std::{
-    cmp,
     collections::HashMap,
     env::{self},
-    fs,
-    ops::{self, Deref},
-    process,
+    fs, process,
 };
 
 mod tokenizer;
-use tokenizer::{Token, TokenType, Tokenizer};
+use tokenizer::{Precedence, Token, TokenType, Tokenizer};
 
-use crate::tokenizer::Precedence;
+mod variant;
+use variant::{NativeFunction, Variant};
 
 struct Parser {
     tokenizer: Tokenizer,
@@ -474,157 +472,6 @@ impl ASTNode for NodeAssignment {
         let value = context.pop();
         if let Variant::Identifier(identifier) = &self.identifier.0 {
             context.variable_set(identifier, value);
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct NativeFunction {
-    name: String,
-    func: &'static dyn Fn(Vec<Variant>) -> Vec<Variant>,
-}
-
-impl std::fmt::Debug for NativeFunction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&format!("<NativeFunction::{}>", self.name))
-    }
-}
-
-impl Deref for NativeFunction {
-    type Target = &'static dyn Fn(Vec<Variant>) -> Vec<Variant>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.func
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Variant {
-    Identifier(String),
-    String(String),
-    Number(i32),
-    Boolean(bool),
-    NativeFunction(NativeFunction),
-}
-
-impl Variant {
-    fn is_true(&self) -> bool {
-        match self {
-            Variant::String(s) => !s.is_empty(),
-            Variant::Number(n) => *n != 0,
-            Variant::Boolean(b) => *b,
-            _ => true,
-        }
-    }
-
-    fn is_false(&self) -> bool {
-        !self.is_true()
-    }
-}
-
-impl fmt::Display for Variant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Variant::Identifier(ident) => f.write_fmt(format_args!("{}", ident)),
-            Variant::String(s) => f.write_fmt(format_args!("{}", s)),
-            Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
-            Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
-            Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
-        }
-    }
-}
-
-impl From<Token> for Variant {
-    fn from(token: Token) -> Self {
-        match token.r#type {
-            TokenType::Identifier => Self::Identifier(token.lexeme),
-            TokenType::Number => Self::Number(token.lexeme.parse().unwrap()),
-            TokenType::String => Self::String(token.lexeme),
-            TokenType::Boolean => Self::Boolean(token.lexeme == "true"),
-            _ => panic!("Invalid conversion for token {:?}", token),
-        }
-    }
-}
-
-impl cmp::PartialEq for Variant {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::String(l0), Self::String(r0)) => l0 == r0,
-            (Self::Number(l0), Self::Number(r0)) => l0 == r0,
-            (Self::Boolean(b0), Self::Boolean(b1)) => b0 == b1,
-            _ => panic!("RuntimeError: cannot compare {:?} and {:?}", self, other),
-        }
-    }
-}
-
-impl cmp::PartialOrd for Variant {
-    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-        match (self, other) {
-            (Variant::Number(n1), Variant::Number(n2)) => n1.partial_cmp(n2),
-            _ => panic!("RuntimeError: cannot compare {:?} and {:?}", self, other),
-        }
-    }
-}
-
-impl ops::Add for Variant {
-    type Output = Variant;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
-            Variant::Number(*lhs + *rhs)
-        } else {
-            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
-        }
-    }
-}
-
-impl ops::Sub for Variant {
-    type Output = Variant;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
-            Variant::Number(*lhs - *rhs)
-        } else {
-            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
-        }
-    }
-}
-
-impl ops::Mul for Variant {
-    type Output = Variant;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
-            Variant::Number(*lhs * *rhs)
-        } else {
-            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
-        }
-    }
-}
-
-impl ops::Div for Variant {
-    type Output = Variant;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        if let (Variant::Number(lhs), Variant::Number(rhs)) = (&self, &rhs) {
-            Variant::Number(*lhs / *rhs)
-        } else {
-            panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
-        }
-    }
-}
-
-impl ops::Neg for Variant {
-    type Output = Variant;
-
-    fn neg(self) -> Self::Output {
-        if let Variant::Number(n) = self {
-            Variant::Number(-n)
-        } else {
-            panic!(
-                "RuntimeError: cannot apply unary operator `-` to {:?}",
-                self
-            );
         }
     }
 }

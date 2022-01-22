@@ -678,16 +678,6 @@ impl ExecutionContext {
     }
 }
 
-trait CompilationUnit {
-    fn execute(&self, context: &mut ExecutionContext);
-}
-
-impl CompilationUnit for Variant {
-    fn execute(&self, context: &mut ExecutionContext) {
-        context.push(self.clone());
-    }
-}
-
 fn show_usage(program_name: &str, error_msg: &str) {
     println!("usage: {} file_name", program_name);
     println!("error: {}", error_msg)

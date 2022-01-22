@@ -6,7 +6,6 @@ pub enum TokenType {
     Number,
     String,
     Boolean,
-    Print,
     Assignment,
     Plus,
     Minus,
@@ -18,6 +17,8 @@ pub enum TokenType {
     GreaterOrEqualThan,
     Equality,
     Inequality,
+    LeftParenthesis,
+    RightParenthesis,
     Comma,
     Newline,
     Eof,
@@ -33,6 +34,7 @@ pub struct Token {
 
 pub enum Precedence {
     None,
+    Parenthesis,    // ( )
     Assignment,     // =
     Relational,     // < > <= >= == !=
     Addition,       // + -
@@ -61,9 +63,7 @@ impl Token {
 
     pub fn get_precedence(&self) -> u32 {
         match self.r#type {
-            TokenType::Print | TokenType::Comma | TokenType::Newline | TokenType::Eof => {
-                Precedence::None as u32
-            }
+            TokenType::Comma | TokenType::Newline | TokenType::Eof => Precedence::None as u32,
             TokenType::Assignment => Precedence::Assignment as u32,
             TokenType::Plus | TokenType::Minus => Precedence::Addition as u32,
             TokenType::Mul | TokenType::Div => Precedence::Multiplication as u32,
@@ -75,6 +75,9 @@ impl Token {
             | TokenType::Inequality => Precedence::Relational as u32,
             TokenType::Identifier | TokenType::Number | TokenType::String | TokenType::Boolean => {
                 Precedence::Primary as u32
+            }
+            TokenType::LeftParenthesis | TokenType::RightParenthesis => {
+                Precedence::Parenthesis as u32
             }
         }
     }
@@ -139,9 +142,7 @@ impl Tokenizer {
             Ok(result)
         } else if chr.is_ascii_alphabetic() {
             let mut token = self.parse_identifier();
-            if token.lexeme == "print" {
-                token.r#type = TokenType::Print;
-            } else if token.lexeme == "true" || token.lexeme == "false" {
+            if token.lexeme == "true" || token.lexeme == "false" {
                 token.r#type = TokenType::Boolean
             }
             Ok(token)
@@ -153,6 +154,8 @@ impl Tokenizer {
                 '/' => Ok(self.create_token(TokenType::Div, "/")),
                 ',' => Ok(self.create_token(TokenType::Comma, ",")),
                 '<' | '>' | '=' | '!' => self.parse_relational_token(chr),
+                '(' => Ok(self.create_token(TokenType::LeftParenthesis, "(")),
+                ')' => Ok(self.create_token(TokenType::RightParenthesis, ")")),
                 '"' => Ok(self.parse_string()),
                 '#' => {
                     self.consume_comment();

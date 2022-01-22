@@ -222,6 +222,14 @@ impl Parser {
             }));
         }
 
+        if lhs.is_type(TokenType::LeftParenthesis) {
+            let parenthesis_expression = self.parse_expression(Precedence::Assignment as u32);
+
+            self.expect(TokenType::RightParenthesis, "Expected `)` after `(` token")?;
+
+            return parenthesis_expression;
+        }
+
         if !lhs.is_any_type(&[
             TokenType::Identifier,
             TokenType::Number,
@@ -274,6 +282,7 @@ impl Parser {
                 rhs,
             });
         }
+
         Ok(expr_node)
     }
 

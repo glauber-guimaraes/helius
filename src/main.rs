@@ -1,7 +1,12 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::{cmp, collections::HashMap, env, fs, ops, process};
+use std::{
+    cmp,
+    collections::HashMap,
+    env::{self},
+    fs, ops, process,
+};
 
 mod tokenizer;
 use tokenizer::{Token, TokenType, Tokenizer};
@@ -109,26 +114,41 @@ impl Parser {
         }
     }
 
+    /// A statement can be either an assignment or function call followed by a newline:
+    /// statement ::= (<assignment> | <funccall>) "\n"
+    /// assignment ::= <identifier> "=" <expression>
+    /// funccall ::= <identifier> (<string_literal> | "(" <expression> {"," <expression>} ")")
     fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
-        match self.current.as_ref().unwrap().r#type {
-            TokenType::Identifier => self.parse_assignment(),
-            TokenType::Print => self.parse_print(),
-            _ => self.create_error_at_token(
-                self.current.as_ref().unwrap(),
-                &format!(
-                    "Unexpected statement start `{}`",
-                    &self.current.as_ref().unwrap()
-                ),
+        let ident = self.consume();
+
+        if !ident.is_type(TokenType::Identifier) {
+            return self.create_error_at_token(
+                &ident,
+                &format!("Unexpected statement start `{}`", ident),
                 "",
-            ),
+            );
         }
+
+        if self.match_and_advance(TokenType::Assignment) {
+            return self.parse_assignment(ident);
+        }
+
+        let current_type = self.current.as_ref().unwrap().r#type;
+        if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
+            return self.parse_function_call(ident);
+        }
+
+        return self.create_error_at_token(
+            self.current.as_ref().unwrap(),
+            &format!(
+                "Expected assignment or function call, found `{}`",
+                self.current.as_ref().unwrap()
+            ),
+            "expected here",
+        );
     }
 
-    fn parse_assignment(&mut self) -> ParserResult<Box<dyn ASTNode>> {
-        assert!(self.current.as_ref().unwrap().r#type == TokenType::Identifier);
-        let ident = self.consume();
-        self.expect(TokenType::Assignment, "Expected after identifier")?;
-
+    fn parse_assignment(&mut self, ident: Token) -> ParserResult<Box<dyn ASTNode>> {
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
         Ok(Box::new(NodeAssignment {
             identifier: NodeVariant(ident.into()),
@@ -136,19 +156,39 @@ impl Parser {
         }))
     }
 
-    fn parse_print(&mut self) -> ParserResult<Box<dyn ASTNode>> {
-        assert!(self.match_and_advance(TokenType::Print));
-        let mut node = NodeExpressionList(vec![]);
+    fn parse_function_call(&mut self, ident: Token) -> ParserResult<Box<dyn ASTNode>> {
+        if self.current.as_ref().unwrap().is_type(TokenType::String) {
+            let arg = self.consume();
+            let mut args = NodeExpressionList(vec![]);
+            args.push(Box::new(NodeVariant(arg.into())));
+            return Ok(Box::new(NodeCall {
+                func: ident.lexeme,
+                args,
+            }));
+        }
+
+        self.expect(
+            TokenType::LeftParenthesis,
+            "Expected `(` at the start of function call",
+        )?;
+
+        let mut args = NodeExpressionList(vec![]);
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
-        node.push(expression);
+        args.push(expression);
 
         while self.match_and_advance(TokenType::Comma) {
             let expression = self.parse_expression(Precedence::Assignment as u32)?;
-            node.push(expression);
+            args.push(expression);
         }
+
+        self.expect(
+            TokenType::RightParenthesis,
+            "Expected `)` at the end of function call",
+        )?;
+
         Ok(Box::new(NodeCall {
-            func: "print".to_string(),
-            args: node,
+            func: ident.lexeme,
+            args,
         }))
     }
 
@@ -381,10 +421,20 @@ impl ASTNode for NodeCall {
         for _ in 0..self.args.0.len() {
             args.push(context.pop());
         }
+
+        context.call_native_function(&self.func, args);
+    }
+}
+
+mod helius_std {
+    use crate::Variant;
+
+    pub fn print(args: Vec<Variant>) -> Vec<Variant> {
         for arg in args.iter().rev() {
             print!("{} ", arg);
         }
         println!();
+        Vec::new()
     }
 }
 
@@ -409,7 +459,7 @@ impl ASTNode for NodeAssignment {
 }
 
 #[derive(Debug, Clone)]
-enum Variant {
+pub enum Variant {
     Identifier(String),
     String(String),
     Number(i32),
@@ -526,6 +576,7 @@ impl ops::Neg for Variant {
 struct ExecutionContext {
     variables: HashMap<String, Variant>,
     stack: Vec<Variant>,
+    native_functions: HashMap<String, Box<&'static dyn Fn(Vec<Variant>) -> Vec<Variant>>>,
 }
 
 impl ExecutionContext {
@@ -543,6 +594,25 @@ impl ExecutionContext {
 
     fn variable_set(&mut self, name: &str, value: Variant) {
         self.variables.insert(name.to_string(), value);
+    }
+
+    fn add_native_function<F>(&mut self, name: &str, func: &'static F)
+    where
+        F: Fn(Vec<Variant>) -> Vec<Variant>,
+    {
+        self.native_functions
+            .insert(name.to_owned(), Box::new(func));
+    }
+
+    fn call_native_function(&mut self, name: &str, args: Vec<Variant>) {
+        let f = match self.native_functions.get(name) {
+            Some(f) => f,
+            None => panic!("Trying to call non existent function"),
+        };
+        let results = f(args);
+        for result in results.into_iter().rev() {
+            self.push(result);
+        }
     }
 }
 
@@ -587,7 +657,10 @@ fn main() {
     let mut context = ExecutionContext {
         variables: HashMap::new(),
         stack: vec![],
+        native_functions: HashMap::new(),
     };
+
+    context.add_native_function("print", &helius_std::print);
 
     for stmt in program {
         stmt.execute(&mut context);

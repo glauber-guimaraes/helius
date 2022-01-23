@@ -157,7 +157,10 @@ impl Parser {
 
         let mut true_block = vec![];
         let mut false_block = vec![];
+        let mut parsing_block = &mut true_block;
+
         let mut has_else_block = false;
+
         loop {
             while self.match_and_advance(TokenType::Newline) {}
 
@@ -169,46 +172,43 @@ impl Parser {
                 break;
             }
 
-            if self.match_and_advance(TokenType::Else) {
+            if self.current.as_ref().unwrap().is_type(TokenType::Else) {
+                let else_token = self.current.to_owned().unwrap();
+                self.advance();
+
+                match (has_else_block, self.current.as_ref().unwrap().r#type) {
+                    (true, TokenType::If) => {
+                        return self.create_error_at_token(
+                            &else_token,
+                            "Conditional block cannot have `else if` defined after `else`",
+                            "branch started here",
+                        )
+                    }
+                    (true, _) => {
+                        return self.create_error_at_token(
+                            &else_token,
+                            "Conditional block cannot have multiple `else` branches",
+                            "branch started here",
+                        )
+                    }
+                    (_, _) => {}
+                };
+
+                if self.match_and_advance(TokenType::If) {
+                    let elseif = self.parse_conditional()?;
+                    false_block.push(elseif);
+                    break;
+                }
                 has_else_block = true;
-                break;
+                parsing_block = &mut false_block;
+                continue;
             }
 
             match self.parse_statement() {
-                Ok(stmt) => true_block.push(stmt),
+                Ok(stmt) => parsing_block.push(stmt),
                 Err(e) => {
                     self.print_error(e);
                     self.recover_from_error();
-                }
-            }
-        }
-
-        if has_else_block {
-            loop {
-                while self.match_and_advance(TokenType::Newline) {}
-
-                if self.match_and_advance(TokenType::Eof) {
-                    break;
-                }
-
-                if self.match_and_advance(TokenType::End) {
-                    break;
-                }
-
-                if self.match_and_advance(TokenType::Else) {
-                    return self.create_error_at_token(
-                        self.current.as_ref().unwrap(),
-                        "Unexpected else in block with another else",
-                        "second else here",
-                    );
-                }
-
-                match self.parse_statement() {
-                    Ok(stmt) => false_block.push(stmt),
-                    Err(e) => {
-                        self.print_error(e);
-                        self.recover_from_error();
-                    }
                 }
             }
         }

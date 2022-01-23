@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use core::fmt;
 use std::{
     collections::HashMap,
     env::{self},
@@ -309,19 +308,13 @@ impl Parser {
     }
 }
 
-trait ASTNode: fmt::Display {
+trait ASTNode {
     fn execute(&self, context: &mut ExecutionContext);
 }
 
 struct NodeUnaryOperation {
     op: String,
     rhs: Box<dyn ASTNode>,
-}
-
-impl fmt::Display for NodeUnaryOperation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("[{}] {}", self.op, self.rhs))
-    }
 }
 
 impl ASTNode for NodeUnaryOperation {
@@ -339,12 +332,6 @@ struct NodeBinaryOperation {
     lhs: Box<dyn ASTNode>,
     op: String,
     rhs: Box<dyn ASTNode>,
-}
-
-impl fmt::Display for NodeBinaryOperation {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("[{}] {} {}", self.op, self.lhs, self.rhs))
-    }
 }
 
 impl ASTNode for NodeBinaryOperation {
@@ -370,11 +357,7 @@ impl ASTNode for NodeBinaryOperation {
 }
 
 struct NodeVariant(Variant);
-impl fmt::Display for NodeVariant {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{:?}", self.0))
-    }
-}
+
 impl ASTNode for NodeVariant {
     fn execute(&self, context: &mut ExecutionContext) {
         match &self.0 {
@@ -393,18 +376,6 @@ impl NodeExpressionList {
     }
 }
 
-impl fmt::Display for NodeExpressionList {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let count = self.0.len();
-        for (i, node) in self.0.iter().enumerate() {
-            f.write_fmt(format_args!("{}", node))?;
-            if i < count - 1 {
-                f.write_str(", ")?;
-            }
-        }
-        Ok(())
-    }
-}
 impl ASTNode for NodeExpressionList {
     fn execute(&self, context: &mut ExecutionContext) {
         for expr in &self.0 {
@@ -417,11 +388,7 @@ struct NodeCall {
     func: String,
     args: NodeExpressionList,
 }
-impl fmt::Display for NodeCall {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}({})", self.func, self.args))
-    }
-}
+
 impl ASTNode for NodeCall {
     fn execute(&self, context: &mut ExecutionContext) {
         // Assume print for now.
@@ -461,11 +428,6 @@ struct NodeAssignment {
     expression: Box<dyn ASTNode>,
 }
 
-impl fmt::Display for NodeAssignment {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{} = {}", self.identifier, self.expression))
-    }
-}
 impl ASTNode for NodeAssignment {
     fn execute(&self, context: &mut ExecutionContext) {
         self.expression.execute(context);

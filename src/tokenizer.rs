@@ -23,6 +23,8 @@ pub enum TokenType {
     Then,
     Else,
     End,
+    While,
+    Do,
     Comma,
     Newline,
     Eof,
@@ -153,6 +155,8 @@ impl Tokenizer {
                 "then" => TokenType::Then,
                 "else" => TokenType::Else,
                 "end" => TokenType::End,
+                "while" => TokenType::While,
+                "do" => TokenType::Do,
                 _ => token.r#type,
             };
             Ok(token)

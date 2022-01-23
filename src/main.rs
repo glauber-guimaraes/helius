@@ -120,8 +120,12 @@ impl Parser {
     fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         let ident = self.consume();
 
-        if ident.is_type(TokenType::If) {
-            let result = self.parse_conditional();
+        if ident.is_any_type(&[TokenType::If, TokenType::While]) {
+            let result = match ident.r#type {
+                TokenType::If => self.parse_conditional(),
+                TokenType::While => self.parse_loop(),
+                _ => unreachable!(),
+            };
 
             if result.is_err() {
                 while !self
@@ -162,6 +166,35 @@ impl Parser {
             ),
             "expected here",
         );
+    }
+
+    fn parse_loop(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        let condition = self.parse_expression(Precedence::Assignment as u32)?;
+        self.expect(TokenType::Do, "")?;
+
+        let mut block = vec![];
+
+        loop {
+            while self.match_and_advance(TokenType::Newline) {}
+
+            if self.match_and_advance(TokenType::Eof) {
+                break;
+            }
+
+            if self.match_and_advance(TokenType::End) {
+                break;
+            }
+
+            match self.parse_statement() {
+                Ok(stmt) => block.push(stmt),
+                Err(e) => {
+                    self.print_error(e);
+                    self.recover_from_error();
+                }
+            }
+        }
+
+        Ok(Box::new(NodeLoop { condition, block }))
     }
 
     fn parse_conditional(&mut self) -> ParserResult<Box<dyn ASTNode>> {
@@ -396,6 +429,28 @@ impl Parser {
 
 trait ASTNode {
     fn execute(&self, context: &mut ExecutionContext);
+}
+
+struct NodeLoop {
+    condition: Box<dyn ASTNode>,
+    block: Vec<Box<dyn ASTNode>>,
+}
+
+impl ASTNode for NodeLoop {
+    fn execute(&self, context: &mut ExecutionContext) {
+        loop {
+            self.condition.execute(context);
+            let condition = context.pop();
+
+            if condition.is_false() {
+                break;
+            }
+
+            for node in &self.block {
+                node.execute(context);
+            }
+        }
+    }
 }
 
 struct NodeConditional {

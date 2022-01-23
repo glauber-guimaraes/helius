@@ -310,4 +310,30 @@ mod tests {
 
         assert_eq!(token.lexeme, expected);
     }
+
+    #[test]
+    fn test_comma_after_string() {
+        let program = "\"x\",x";
+        let mut tokenizer = Tokenizer::new(program.to_string());
+
+        let expected = &[TokenType::String, TokenType::Comma, TokenType::Identifier];
+
+        let mut result = vec![];
+        loop {
+            if let Ok(token) = tokenizer.next() {
+                if token.is_type(TokenType::Eof) {
+                    break;
+                }
+
+                result.push(token);
+            } else {
+                panic!();
+            }
+        }
+
+        assert_eq!(result.len(), expected.len());
+        for (res, exp) in result.iter().zip(expected.iter()) {
+            assert!(res.is_type(*exp));
+        }
+    }
 }

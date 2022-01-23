@@ -571,7 +571,7 @@ mod helius_std {
 
     pub fn print(args: Vec<Variant>) -> Vec<Variant> {
         for arg in args.iter().rev() {
-            print!("{} ", arg);
+            print!("{}", arg);
         }
         println!();
         Vec::new()

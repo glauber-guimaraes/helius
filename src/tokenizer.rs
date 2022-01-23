@@ -255,8 +255,6 @@ impl Tokenizer {
             str.push(self.source[self.index]);
             self.advance();
         }
-        // Skip the ending `"`
-        self.advance();
         token.lexeme = str;
         token
     }

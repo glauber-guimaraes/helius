@@ -121,7 +121,20 @@ impl Parser {
         let ident = self.consume();
 
         if ident.is_type(TokenType::If) {
-            return self.parse_conditional();
+            let result = self.parse_conditional();
+
+            if result.is_err() {
+                while !self
+                    .current
+                    .as_ref()
+                    .unwrap()
+                    .is_any_type(&[TokenType::End, TokenType::Eof])
+                {
+                    self.consume();
+                }
+            }
+
+            return result;
         }
 
         if !ident.is_type(TokenType::Identifier) {

@@ -586,6 +586,30 @@ mod helius_std {
         assert!(args[0].is_true());
         Vec::new()
     }
+
+    pub mod math {
+        use crate::Variant;
+        use std::convert::TryFrom;
+
+        pub fn pow(args: Vec<Variant>) -> Vec<Variant> {
+            if args.len() != 2 {
+                panic!("pow(n, e) expects 2 arguments, {} given.", args.len());
+            }
+
+            let result = match (&args[0], &args[1]) {
+                (Variant::Number(a), Variant::Number(b)) => {
+                    if b.is_negative() {
+                        panic!("pow(n, e) can't have negative exponents until the language supports floating numbers");
+                    }
+
+                    i32::pow(*a, u32::try_from(*b).unwrap())
+                }
+                (_, _) => panic!("pow(n, e) can only be used with numeric arguments."),
+            };
+
+            vec![Variant::Number(result)]
+        }
+    }
 }
 
 struct NodeAssignment {
@@ -687,6 +711,7 @@ fn main() {
 
     context.add_native_function("print", &helius_std::print);
     context.add_native_function("assert", &helius_std::assert);
+    context.add_native_function("pow", &helius_std::math::pow);
 
     for stmt in program {
         stmt.execute(&mut context);

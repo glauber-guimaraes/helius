@@ -1,0 +1,19 @@
+msg = "Hello world"
+show = function() print(msg) end
+
+show()
+
+greet = function(name)
+    print("Hello ", name)
+end
+
+greet "You"
+
+recursion = function(i)
+    print (i)
+    if i > 0 then
+        recursion(i - 1)
+    end
+end
+
+recursion(10)

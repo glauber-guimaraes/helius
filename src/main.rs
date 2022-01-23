@@ -3,7 +3,8 @@
 use std::{
     collections::HashMap,
     env::{self},
-    fs, process,
+    fmt, fs, process,
+    rc::Rc,
 };
 
 mod tokenizer;
@@ -16,6 +17,7 @@ struct Parser {
     tokenizer: Tokenizer,
     current: Option<Token>,
     has_error: bool,
+    functions: Vec<NodeFunctionBlock>,
 }
 
 #[derive(Debug)]
@@ -34,6 +36,7 @@ impl Parser {
             tokenizer,
             current: None,
             has_error: false,
+            functions: vec![],
         }
     }
 
@@ -41,7 +44,8 @@ impl Parser {
         self.program()
     }
 
-    fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult {
+    fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult<Token> {
+        let current = self.current.as_ref().unwrap().clone();
         if !self.match_and_advance(token_type) {
             return self.create_error_at_token(
                 self.current.as_ref().unwrap(),
@@ -54,7 +58,7 @@ impl Parser {
                 "expected here",
             );
         }
-        Ok(())
+        Ok(current)
     }
 
     fn program(&mut self) -> Vec<Box<dyn ASTNode>> {
@@ -291,18 +295,21 @@ impl Parser {
         )?;
 
         let mut args = NodeExpressionList(vec![]);
-        let expression = self.parse_expression(Precedence::Assignment as u32)?;
-        args.push(expression);
 
-        while self.match_and_advance(TokenType::Comma) {
+        if !self.match_and_advance(TokenType::RightParenthesis) {
             let expression = self.parse_expression(Precedence::Assignment as u32)?;
             args.push(expression);
-        }
 
-        self.expect(
-            TokenType::RightParenthesis,
-            "Expected `)` at the end of function call",
-        )?;
+            while self.match_and_advance(TokenType::Comma) {
+                let expression = self.parse_expression(Precedence::Assignment as u32)?;
+                args.push(expression);
+            }
+
+            self.expect(
+                TokenType::RightParenthesis,
+                "Expected `)` at the end of function call",
+            )?;
+        }
 
         Ok(Box::new(NodeCall {
             func: ident.lexeme,
@@ -330,6 +337,64 @@ impl Parser {
         self.current.as_ref().unwrap().r#type.to_owned()
     }
 
+    fn parse_function_definition(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        self.expect(
+            TokenType::LeftParenthesis,
+            "Expect `(` before argument list",
+        )?;
+
+        let mut args = vec![];
+        if !self.match_and_advance(TokenType::RightParenthesis) {
+            let ident = self.expect(TokenType::Identifier, "")?;
+            args.push(ident);
+
+            while self.match_and_advance(TokenType::Comma) {
+                let expression = self.expect(TokenType::Identifier, "")?;
+                args.push(expression);
+            }
+            self.expect(
+                TokenType::RightParenthesis,
+                "Expected `)` at the end of function call",
+            )?;
+        }
+        let args: Vec<String> = args.into_iter().map(|arg| arg.lexeme).collect();
+
+        let mut block = vec![];
+
+        loop {
+            while self.match_and_advance(TokenType::Newline) {}
+
+            if self.match_and_advance(TokenType::Eof) {
+                return Err(ParserError {
+                    msg: "Reached end of file while parsing function definition".to_string(),
+                    short_msg: "".to_string(),
+                    line: 0,
+                    column: 0,
+                });
+            }
+
+            if self.match_and_advance(TokenType::End) {
+                break;
+            }
+
+            match self.parse_statement() {
+                Ok(stmt) => block.push(stmt),
+                Err(e) => {
+                    self.print_error(e);
+                    self.recover_from_error();
+                }
+            }
+        }
+
+        let function_id = self.functions.len() as u32;
+        self.functions.push(NodeFunctionBlock {
+            arg_names: args,
+            block,
+        });
+
+        Ok(Box::new(NodeVariant(Variant::Function(function_id))))
+    }
+
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<Box<dyn ASTNode>> {
         // prefix expression
         let lhs = self.consume();
@@ -340,6 +405,10 @@ impl Parser {
                 op: "-".to_string(),
                 rhs: self.parse_expression(Precedence::Unary as u32).unwrap(),
             }));
+        }
+
+        if lhs.is_type(TokenType::Function) {
+            return self.parse_function_definition();
         }
 
         if lhs.is_type(TokenType::LeftParenthesis) {
@@ -440,6 +509,25 @@ impl Parser {
 
 trait ASTNode {
     fn execute(&self, context: &mut ExecutionContext);
+}
+
+struct NodeFunctionBlock {
+    arg_names: Vec<String>,
+    block: Vec<Box<dyn ASTNode>>,
+}
+
+impl ASTNode for NodeFunctionBlock {
+    fn execute(&self, context: &mut ExecutionContext) {
+        for instruction in self.block.iter() {
+            instruction.execute(context);
+        }
+    }
+}
+
+impl fmt::Debug for NodeFunctionBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        f.write_str("<Function>")
+    }
 }
 
 struct NodeLoop {
@@ -641,6 +729,7 @@ impl ASTNode for NodeAssignment {
 struct ExecutionContext {
     variables: HashMap<String, Variant>,
     stack: Vec<Variant>,
+    functions: Vec<Rc<NodeFunctionBlock>>,
 }
 
 impl ExecutionContext {
@@ -674,15 +763,35 @@ impl ExecutionContext {
     }
 
     fn call_native_function(&mut self, name: &str, args: Vec<Variant>) {
-        let f = match self.variable_lookup(name) {
-            Some(Variant::NativeFunction(f)) => f,
-            _ => panic!("Trying to call non existent function"),
-        };
+        match self.variable_lookup(name) {
+            Some(Variant::NativeFunction(f)) => {
+                let results = f(args);
+                for result in results.into_iter().rev() {
+                    self.push(result);
+                }
+            }
+            Some(Variant::Function(block)) => {
+                let f = self.functions[(*block) as usize].clone();
+                let mut function_scope: HashMap<String, Variant> = self.variables.clone();
 
-        let results = f(args);
-        for result in results.into_iter().rev() {
-            self.push(result);
-        }
+                f.arg_names
+                    .clone()
+                    .into_iter()
+                    .zip(args.into_iter())
+                    .for_each(|(name, value)| {
+                        function_scope.insert(name, value);
+                    });
+                f.execute(&mut ExecutionContext {
+                    variables: function_scope,
+                    stack: vec![],
+                    functions: self.functions.clone(),
+                });
+            }
+            None => panic!("Trying to call non existent function `{}`", &name),
+            _ => {
+                panic!("Trying to call variable which is non callable");
+            }
+        };
     }
 }
 
@@ -717,6 +826,7 @@ fn main() {
     let mut context = ExecutionContext {
         variables: HashMap::new(),
         stack: vec![],
+        functions: parser.functions.into_iter().map(Rc::new).collect(),
     };
 
     context.add_native_function("print", &helius_std::print);

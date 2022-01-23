@@ -12,6 +12,7 @@ pub enum Variant {
     Number(i32),
     Boolean(bool),
     NativeFunction(NativeFunction),
+    Function(u32),
     None,
 }
 
@@ -60,6 +61,7 @@ impl fmt::Display for Variant {
             Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
             Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
             Variant::None => f.write_str("None"),
+            Variant::Function(_) => f.write_str("<Function>"),
         }
     }
 }

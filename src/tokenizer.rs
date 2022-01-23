@@ -26,6 +26,7 @@ pub enum TokenType {
     While,
     Do,
     None,
+    Function,
     Comma,
     Newline,
     Eof,
@@ -159,6 +160,7 @@ impl Tokenizer {
                 "while" => TokenType::While,
                 "do" => TokenType::Do,
                 "none" => TokenType::None,
+                "function" => TokenType::Function,
                 _ => token.r#type,
             };
             Ok(token)

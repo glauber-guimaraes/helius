@@ -19,6 +19,10 @@ pub enum TokenType {
     Inequality,
     LeftParenthesis,
     RightParenthesis,
+    If,
+    Then,
+    Else,
+    End,
     Comma,
     Newline,
     Eof,
@@ -79,6 +83,7 @@ impl Token {
             TokenType::LeftParenthesis | TokenType::RightParenthesis => {
                 Precedence::Parenthesis as u32
             }
+            _ => Precedence::None as u32,
         }
     }
 }
@@ -142,9 +147,14 @@ impl Tokenizer {
             Ok(result)
         } else if chr.is_ascii_alphabetic() {
             let mut token = self.parse_identifier();
-            if token.lexeme == "true" || token.lexeme == "false" {
-                token.r#type = TokenType::Boolean
-            }
+            token.r#type = match &*token.lexeme {
+                "true" | "false" => TokenType::Boolean,
+                "if" => TokenType::If,
+                "then" => TokenType::Then,
+                "else" => TokenType::Else,
+                "end" => TokenType::End,
+                _ => token.r#type,
+            };
             Ok(token)
         } else if chr.is_ascii_punctuation() {
             let result = match chr {

@@ -120,6 +120,10 @@ impl Parser {
     fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         let ident = self.consume();
 
+        if ident.is_type(TokenType::If) {
+            return self.parse_conditional();
+        }
+
         if !ident.is_type(TokenType::Identifier) {
             return self.create_error_at_token(
                 &ident,
@@ -145,6 +149,75 @@ impl Parser {
             ),
             "expected here",
         );
+    }
+
+    fn parse_conditional(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        let condition = self.parse_expression(Precedence::Assignment as u32)?;
+        self.expect(TokenType::Then, "")?;
+
+        let mut true_block = vec![];
+        let mut false_block = vec![];
+        let mut has_else_block = false;
+        loop {
+            while self.match_and_advance(TokenType::Newline) {}
+
+            if self.match_and_advance(TokenType::Eof) {
+                break;
+            }
+
+            if self.match_and_advance(TokenType::End) {
+                break;
+            }
+
+            if self.match_and_advance(TokenType::Else) {
+                has_else_block = true;
+                break;
+            }
+
+            match self.parse_statement() {
+                Ok(stmt) => true_block.push(stmt),
+                Err(e) => {
+                    self.print_error(e);
+                    self.recover_from_error();
+                }
+            }
+        }
+
+        if has_else_block {
+            loop {
+                while self.match_and_advance(TokenType::Newline) {}
+
+                if self.match_and_advance(TokenType::Eof) {
+                    break;
+                }
+
+                if self.match_and_advance(TokenType::End) {
+                    break;
+                }
+
+                if self.match_and_advance(TokenType::Else) {
+                    return self.create_error_at_token(
+                        self.current.as_ref().unwrap(),
+                        "Unexpected else in block with another else",
+                        "second else here",
+                    );
+                }
+
+                match self.parse_statement() {
+                    Ok(stmt) => false_block.push(stmt),
+                    Err(e) => {
+                        self.print_error(e);
+                        self.recover_from_error();
+                    }
+                }
+            }
+        }
+
+        Ok(Box::new(NodeConditional {
+            condition,
+            true_block,
+            false_block,
+        }))
     }
 
     fn parse_assignment(&mut self, ident: Token) -> ParserResult<Box<dyn ASTNode>> {
@@ -310,6 +383,29 @@ impl Parser {
 
 trait ASTNode {
     fn execute(&self, context: &mut ExecutionContext);
+}
+
+struct NodeConditional {
+    condition: Box<dyn ASTNode>,
+    true_block: Vec<Box<dyn ASTNode>>,
+    false_block: Vec<Box<dyn ASTNode>>,
+}
+
+impl ASTNode for NodeConditional {
+    fn execute(&self, context: &mut ExecutionContext) {
+        self.condition.execute(context);
+        let condition = context.pop();
+
+        let executing_block = if condition.is_true() {
+            &self.true_block
+        } else {
+            &self.false_block
+        };
+
+        for node in executing_block {
+            node.execute(context)
+        }
+    }
 }
 
 struct NodeUnaryOperation {

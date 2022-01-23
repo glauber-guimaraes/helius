@@ -1,0 +1,16 @@
+print "> Counting from 5..."
+a = 5
+while a >= 0 do
+    print (a)
+    a = a - 1
+end
+
+x = 3
+y = 3
+while x > 0 do
+    while y > 0 do
+        print ("(", x, ",", y, ")")
+        x = x - 1
+        y = y - 1
+    end
+end

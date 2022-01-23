@@ -12,6 +12,7 @@ pub enum Variant {
     Number(i32),
     Boolean(bool),
     NativeFunction(NativeFunction),
+    None,
 }
 
 #[derive(Clone)]
@@ -40,6 +41,7 @@ impl Variant {
             Variant::String(s) => !s.is_empty(),
             Variant::Number(n) => *n != 0,
             Variant::Boolean(b) => *b,
+            Variant::None => false,
             _ => true,
         }
     }
@@ -57,6 +59,7 @@ impl fmt::Display for Variant {
             Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
             Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
             Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
+            Variant::None => f.write_str("None"),
         }
     }
 }
@@ -68,6 +71,7 @@ impl From<Token> for Variant {
             TokenType::Number => Self::Number(token.lexeme.parse().unwrap()),
             TokenType::String => Self::String(token.lexeme),
             TokenType::Boolean => Self::Boolean(token.lexeme == "true"),
+            TokenType::None => Self::None,
             _ => panic!("Invalid conversion for token {:?}", token),
         }
     }
@@ -79,7 +83,8 @@ impl cmp::PartialEq for Variant {
             (Self::String(l0), Self::String(r0)) => l0 == r0,
             (Self::Number(l0), Self::Number(r0)) => l0 == r0,
             (Self::Boolean(b0), Self::Boolean(b1)) => b0 == b1,
-            _ => panic!("RuntimeError: cannot compare {:?} and {:?}", self, other),
+            (Self::None, Self::None) => true,
+            (a, b) => a.is_true() && b.is_true(),
         }
     }
 }

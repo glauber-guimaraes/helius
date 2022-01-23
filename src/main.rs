@@ -351,6 +351,7 @@ impl Parser {
             TokenType::Number,
             TokenType::String,
             TokenType::Boolean,
+            TokenType::None,
         ]) {
             return self.create_error_at_token(
                 &lhs,

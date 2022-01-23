@@ -27,3 +27,10 @@ else
 end
 
 if true then else end
+
+cond = none
+if cond != true then
+    assert(true)
+else
+    assert(false)
+end

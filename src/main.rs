@@ -326,6 +326,10 @@ impl Parser {
         })
     }
 
+    fn peek_type(&self) -> TokenType {
+        self.current.as_ref().unwrap().r#type.to_owned()
+    }
+
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<Box<dyn ASTNode>> {
         // prefix expression
         let lhs = self.consume();
@@ -360,7 +364,13 @@ impl Parser {
             );
         }
 
-        let mut expr_node: Box<dyn ASTNode> = Box::new(NodeVariant(lhs.into()));
+        let mut expr_node: Box<dyn ASTNode>;
+
+        if lhs.is_type(TokenType::Identifier) && self.peek_type() == TokenType::LeftParenthesis {
+            expr_node = self.parse_function_call(lhs)?;
+        } else {
+            expr_node = Box::new(NodeVariant(lhs.into()));
+        }
 
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {

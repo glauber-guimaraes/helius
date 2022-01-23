@@ -1,0 +1,21 @@
+if 3 > 2 then
+    print "It works!"
+end
+
+if 2 > 3 then
+    print "It doesn't actually work :("
+else
+    print "And it's really cool!"
+end
+
+if true then
+    if false then
+        print "Shouldn't print this"
+    else
+        print "But should print this"
+    end
+else
+    print "Shouldn't print this either"
+end
+
+if true then else end

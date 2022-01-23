@@ -18,4 +18,12 @@ else
     print "Shouldn't print this either"
 end
 
+if 3 > 4 then
+    assert(false)
+else if 4 > 3 then
+    print "4 is gt 3!"
+else
+    assert(false)
+end
+
 if true then else end

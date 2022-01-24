@@ -775,11 +775,10 @@ impl ExecutionContext {
                 let mut function_scope: HashMap<String, Variant> = self.variables.clone();
 
                 f.arg_names
-                    .clone()
-                    .into_iter()
+                    .iter()
                     .zip(args.into_iter())
                     .for_each(|(name, value)| {
-                        function_scope.insert(name, value);
+                        function_scope.insert(name.to_owned(), value);
                     });
                 f.execute(&mut ExecutionContext {
                     variables: function_scope,

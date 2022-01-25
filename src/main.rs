@@ -805,11 +805,6 @@ impl ExecutionContext {
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
                 let _return_count = f.clone()(self);
-
-                let stack_base = self.call_info.last().unwrap().stack_base;
-                let local_count = args.len();
-
-                self.stack.drain(stack_base..stack_base + local_count);
             }
             Some(Variant::Function(block)) => {
                 let f = self.functions[(*block) as usize].clone();
@@ -822,6 +817,10 @@ impl ExecutionContext {
                 panic!("Trying to call variable which is non callable");
             }
         };
+        let stack_base = self.call_info.last().unwrap().stack_base;
+        let local_count = args.len();
+        self.stack.drain(stack_base..stack_base + local_count);
+
         self.call_info.pop();
     }
 }

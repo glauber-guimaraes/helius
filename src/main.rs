@@ -146,6 +146,14 @@ impl Parser {
             return result;
         }
 
+        if ident.is_type(TokenType::Continue) {
+            return Ok(Box::new(NodeContinue {}));
+        }
+
+        if ident.is_type(TokenType::Break) {
+            return Ok(Box::new(NodeBreak {}));
+        }
+
         if !ident.is_type(TokenType::Identifier) {
             return self.create_error_at_token(
                 &ident,
@@ -177,7 +185,7 @@ impl Parser {
         let condition = self.parse_expression(Precedence::Assignment as u32)?;
         self.expect(TokenType::Do, "")?;
 
-        let mut block = vec![];
+        let mut block: Vec<Box<dyn ASTNode>> = vec![];
 
         loop {
             while self.match_and_advance(TokenType::Newline) {}
@@ -508,8 +516,32 @@ impl Parser {
     }
 }
 
+#[derive(PartialEq, Debug)]
+enum ContinuationFlow {
+    Normal,
+    Return,
+    Break,
+    Continue,
+}
+
 trait ASTNode {
-    fn execute(&self, context: &mut ExecutionContext);
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow;
+}
+
+struct NodeContinue;
+
+impl ASTNode for NodeContinue {
+    fn execute(&self, _context: &mut ExecutionContext) -> ContinuationFlow {
+        ContinuationFlow::Continue
+    }
+}
+
+struct NodeBreak;
+
+impl ASTNode for NodeBreak {
+    fn execute(&self, _context: &mut ExecutionContext) -> ContinuationFlow {
+        ContinuationFlow::Break
+    }
 }
 
 struct NodeFunctionBlock {
@@ -518,10 +550,14 @@ struct NodeFunctionBlock {
 }
 
 impl ASTNode for NodeFunctionBlock {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         for instruction in self.block.iter() {
-            instruction.execute(context);
+            if instruction.execute(context) == ContinuationFlow::Return {
+                break;
+            }
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -537,8 +573,8 @@ struct NodeLoop {
 }
 
 impl ASTNode for NodeLoop {
-    fn execute(&self, context: &mut ExecutionContext) {
-        loop {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        'outer: loop {
             self.condition.execute(context);
             let condition = context.pop();
 
@@ -546,10 +582,17 @@ impl ASTNode for NodeLoop {
                 break;
             }
 
-            for node in &self.block {
-                node.execute(context);
+            'inner: for node in &self.block {
+                let result = node.execute(context);
+                match result {
+                    ContinuationFlow::Return | ContinuationFlow::Break => break 'outer,
+                    ContinuationFlow::Continue => break 'inner,
+                    ContinuationFlow::Normal => {}
+                }
             }
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -560,7 +603,7 @@ struct NodeConditional {
 }
 
 impl ASTNode for NodeConditional {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.condition.execute(context);
         let condition = context.pop();
 
@@ -571,8 +614,13 @@ impl ASTNode for NodeConditional {
         };
 
         for node in executing_block {
-            node.execute(context)
+            let result = node.execute(context);
+            if result != ContinuationFlow::Normal {
+                return result;
+            }
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -582,13 +630,15 @@ struct NodeUnaryOperation {
 }
 
 impl ASTNode for NodeUnaryOperation {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.rhs.execute(context);
         let rhs = context.pop();
         match self.op.as_str() {
             "-" => context.push(-rhs),
             _ => panic!("RuntimeError: invalid unary operand {}", self.op),
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -599,7 +649,7 @@ struct NodeBinaryOperation {
 }
 
 impl ASTNode for NodeBinaryOperation {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.lhs.execute(context);
         self.rhs.execute(context);
         let rhs = context.pop();
@@ -617,19 +667,23 @@ impl ASTNode for NodeBinaryOperation {
             "!=" => context.push(Variant::Boolean(lhs != rhs)),
             _ => panic!("RuntimeError: invalid operand {}", self.op),
         }
+
+        ContinuationFlow::Normal
     }
 }
 
 struct NodeVariant(Variant);
 
 impl ASTNode for NodeVariant {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         match &self.0 {
             Variant::Identifier(ident) => {
                 context.push(context.variable_lookup(ident).unwrap().clone())
             }
             _ => context.push(self.0.clone()),
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -641,10 +695,12 @@ impl NodeExpressionList {
 }
 
 impl ASTNode for NodeExpressionList {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         for expr in &self.0 {
             expr.execute(context);
         }
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -654,11 +710,13 @@ struct NodeCall {
 }
 
 impl ASTNode for NodeCall {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.args.execute(context);
         let args = self.args.0.iter().map(|_| Variant::None).collect();
 
         context.call_native_function(&self.func, args);
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -719,12 +777,14 @@ struct NodeAssignment {
 }
 
 impl ASTNode for NodeAssignment {
-    fn execute(&self, context: &mut ExecutionContext) {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.expression.execute(context);
         let value = context.pop();
         if let Variant::Identifier(identifier) = &self.identifier.0 {
             context.variable_set(identifier, value);
         }
+
+        ContinuationFlow::Normal
     }
 }
 

@@ -14,3 +14,25 @@ while x > 0 do
         y = y - 1
     end
 end
+
+print "z:"
+z = 10
+while z > 0 do
+    print (z)
+
+    if z < 8 then
+        print "break"
+        break
+    end
+    z = z - 1
+end
+
+print "continue:"
+z = 3
+while z > 0 do
+    z = z - 1
+    if z == 1 then
+        continue
+    end
+    print(z)
+end

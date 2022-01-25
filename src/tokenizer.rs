@@ -27,6 +27,8 @@ pub enum TokenType {
     Do,
     None,
     Function,
+    Break,
+    Continue,
     Comma,
     Newline,
     Eof,
@@ -161,6 +163,8 @@ impl Tokenizer {
                 "do" => TokenType::Do,
                 "none" => TokenType::None,
                 "function" => TokenType::Function,
+                "break" => TokenType::Break,
+                "continue" => TokenType::Continue,
                 _ => token.r#type,
             };
             Ok(token)

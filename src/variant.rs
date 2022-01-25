@@ -87,8 +87,11 @@ impl cmp::PartialEq for Variant {
         match (self, other) {
             (Self::String(l0), Self::String(r0)) => l0 == r0,
             (Self::Number(l0), Self::Number(r0)) => l0 == r0,
-            (Self::Boolean(b0), Self::Boolean(b1)) => b0 == b1,
             (Self::None, Self::None) => true,
+            (_, Self::None) => false,
+            (Self::None, _) => false,
+            (Self::String(_), _) => false,
+            (_, Self::String(_)) => false,
             (a, b) => a.is_true() && b.is_true(),
         }
     }

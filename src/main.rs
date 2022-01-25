@@ -801,21 +801,12 @@ impl ExecutionContext {
 
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
-                let return_count = f.clone()(self, args.len());
-                let return_values: Vec<Variant> = self
-                    .stack
-                    .iter()
-                    .rev()
-                    .take(return_count)
-                    .cloned()
-                    .collect();
+                let _return_count = f.clone()(self, args.len());
 
-                self.stack
-                    .drain(self.call_info.last().unwrap().stack_base..self.stack.len());
+                let stack_base = self.call_info.last().unwrap().stack_base;
+                let local_count = args.len();
 
-                for ret_value in return_values.into_iter() {
-                    self.stack.push(ret_value);
-                }
+                self.stack.drain(stack_base..stack_base + local_count);
             }
             Some(Variant::Function(block)) => {
                 let f = self.functions[(*block) as usize].clone();

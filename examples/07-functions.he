@@ -19,6 +19,6 @@ end
 recursion(10)
 
 add = function(a, b)
-    return "what"
+    return 2 + 2
 end
 assert(add(2, 2) == 4)

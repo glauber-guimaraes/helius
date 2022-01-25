@@ -870,6 +870,12 @@ fn main() {
     for stmt in program {
         stmt.execute(&mut context);
     }
+    if !context.stack.is_empty() {
+        println!("Warning: Stack should be empty when program finishes executing, but contains:");
+        for (i, v) in context.stack.iter().enumerate() {
+            println!("[{}] = {}", i, v);
+        }
+    }
     let execution_time = execution_time.elapsed().as_secs_f64();
 
     println!("\n> Parsing took {:.3}ms", parser_time * 1000.0);

@@ -29,6 +29,7 @@ pub enum TokenType {
     Function,
     Break,
     Continue,
+    Return,
     Comma,
     Newline,
     Eof,
@@ -165,6 +166,7 @@ impl Tokenizer {
                 "function" => TokenType::Function,
                 "break" => TokenType::Break,
                 "continue" => TokenType::Continue,
+                "return" => TokenType::Return,
                 _ => token.r#type,
             };
             Ok(token)

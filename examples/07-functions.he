@@ -17,3 +17,8 @@ recursion = function(i)
 end
 
 recursion(10)
+
+add = function(a, b)
+    return "what"
+end
+assert(add(2, 2) == 4)

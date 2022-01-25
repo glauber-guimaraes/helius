@@ -146,6 +146,10 @@ impl Parser {
             return result;
         }
 
+        if ident.is_type(TokenType::Return) {
+            return self.parse_return();
+        }
+
         if ident.is_type(TokenType::Continue) {
             return Ok(Box::new(NodeContinue {}));
         }
@@ -514,6 +518,20 @@ impl Parser {
             e.short_msg
         );
     }
+
+    fn parse_return(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        let mut args = NodeExpressionList(vec![]);
+
+        if self.peek_type() != TokenType::Newline {
+            args.push(self.parse_expression(Precedence::Assignment as u32)?);
+
+            while self.match_and_advance(TokenType::Comma) {
+                args.push(self.parse_expression(Precedence::Assignment as u32)?);
+            }
+        }
+
+        Ok(Box::new(NodeReturn { args }))
+    }
 }
 
 #[derive(PartialEq, Debug)]
@@ -541,6 +559,17 @@ struct NodeBreak;
 impl ASTNode for NodeBreak {
     fn execute(&self, _context: &mut ExecutionContext) -> ContinuationFlow {
         ContinuationFlow::Break
+    }
+}
+
+struct NodeReturn {
+    args: NodeExpressionList,
+}
+
+impl ASTNode for NodeReturn {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        self.args.execute(context);
+        ContinuationFlow::Return
     }
 }
 

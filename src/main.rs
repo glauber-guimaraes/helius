@@ -3,7 +3,7 @@
 use std::{
     collections::HashMap,
     env::{self},
-    fmt, fs, process,
+    fmt, fs, iter, process,
     rc::Rc,
     time::Instant,
 };
@@ -172,7 +172,7 @@ impl Parser {
 
         let current_type = self.current.as_ref().unwrap().r#type;
         if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
-            return self.parse_function_call(ident);
+            return self.parse_function_call(ident, Some(0));
         }
 
         return self.create_error_at_token(
@@ -291,7 +291,11 @@ impl Parser {
         }))
     }
 
-    fn parse_function_call(&mut self, ident: Token) -> ParserResult<Box<dyn ASTNode>> {
+    fn parse_function_call(
+        &mut self,
+        ident: Token,
+        expected_return_count: Option<usize>,
+    ) -> ParserResult<Box<dyn ASTNode>> {
         if self.current.as_ref().unwrap().is_type(TokenType::String) {
             let arg = self.consume();
             let mut args = NodeExpressionList(vec![]);
@@ -299,6 +303,7 @@ impl Parser {
             return Ok(Box::new(NodeCall {
                 func: ident.lexeme,
                 args,
+                expected_return_count,
             }));
         }
 
@@ -327,6 +332,7 @@ impl Parser {
         Ok(Box::new(NodeCall {
             func: ident.lexeme,
             args,
+            expected_return_count,
         }))
     }
 
@@ -399,6 +405,10 @@ impl Parser {
             }
         }
 
+        block.push(Box::new(NodeReturn {
+            args: NodeExpressionList(vec![]),
+        }));
+
         let function_id = self.functions.len() as u32;
         self.functions.push(NodeFunctionBlock {
             arg_names: args,
@@ -449,7 +459,7 @@ impl Parser {
         let mut expr_node: Box<dyn ASTNode>;
 
         if lhs.is_type(TokenType::Identifier) && self.peek_type() == TokenType::LeftParenthesis {
-            expr_node = self.parse_function_call(lhs)?;
+            expr_node = self.parse_function_call(lhs, Some(1))?;
         } else {
             expr_node = Box::new(NodeVariant(lhs.into()));
         }
@@ -569,6 +579,7 @@ struct NodeReturn {
 impl ASTNode for NodeReturn {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.args.execute(context);
+        context.push(Variant::Number(self.args.0.len() as i32));
         ContinuationFlow::Return
     }
 }
@@ -736,6 +747,7 @@ impl ASTNode for NodeExpressionList {
 struct NodeCall {
     func: String,
     args: NodeExpressionList,
+    expected_return_count: Option<usize>,
 }
 
 impl ASTNode for NodeCall {
@@ -743,7 +755,7 @@ impl ASTNode for NodeCall {
         self.args.execute(context);
         let args = self.args.0.iter().map(|_| Variant::None).collect();
 
-        context.call_native_function(&self.func, args);
+        context.call_native_function(&self.func, args, self.expected_return_count);
 
         ContinuationFlow::Normal
     }
@@ -884,22 +896,34 @@ impl ExecutionContext {
         );
     }
 
-    fn call_native_function(&mut self, name: &str, args: Vec<Variant>) {
+    fn call_native_function(
+        &mut self,
+        name: &str,
+        args: Vec<Variant>,
+        expect_return_count: Option<usize>,
+    ) {
         self.call_info.push(FunctionInfo {
             stack_base: self.stack.len() - args.len(),
             local_variables: vec![],
             arg_count: args.len(),
         });
 
+        let return_count;
+
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
-                let _return_count = f.clone()(self);
+                return_count = f.clone()(self);
             }
             Some(Variant::Function(block)) => {
                 let f = self.functions[(*block) as usize].clone();
                 self.call_info.last_mut().unwrap().local_variables = f.arg_names.clone();
 
                 f.execute(self);
+                if let Variant::Number(n) = self.pop() {
+                    return_count = n as usize;
+                } else {
+                    panic!("Return count is not a number");
+                }
             }
             None => panic!("Trying to call non existent function `{}`", &name),
             _ => {
@@ -909,6 +933,22 @@ impl ExecutionContext {
         let stack_base = self.call_info.last().unwrap().stack_base;
         let local_count = args.len();
         self.stack.drain(stack_base..stack_base + local_count);
+
+        if let Some(expected_return_count) = expect_return_count {
+            let delta = return_count as i32 - expected_return_count as i32;
+            match (delta).cmp(&0) {
+                std::cmp::Ordering::Less => {
+                    for el in iter::repeat_with(|| Variant::None).take(delta.abs() as usize) {
+                        self.push(el);
+                    }
+                }
+
+                std::cmp::Ordering::Greater => {
+                    self.stack.drain(..=(self.stack.len() - delta as usize));
+                }
+                std::cmp::Ordering::Equal => {}
+            }
+        }
 
         self.call_info.pop();
     }

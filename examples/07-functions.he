@@ -19,6 +19,12 @@ end
 recursion(10)
 
 add = function(a, b)
-    return 2 + 2
+    return a + b
 end
-assert(add(2, 2) == 4)
+# assert(add(2, 2) == 4)
+
+add(3, 2)
+
+noreturn = function() end
+
+print(noreturn())

@@ -665,15 +665,15 @@ impl ASTNode for NodeCall {
 mod helius_std {
     use crate::ExecutionContext;
 
-    pub fn print(context: &mut ExecutionContext, arg_count: usize) -> usize {
-        for i in 0..arg_count {
-            print!("{}", context.read_local(i));
+    pub fn print(context: &mut ExecutionContext) -> usize {
+        for arg in context.locals() {
+            print!("{}", arg);
         }
         println!();
         0
     }
 
-    pub fn assert(context: &mut ExecutionContext, arg_count: usize) -> usize {
+    pub fn assert(context: &mut ExecutionContext) -> usize {
         let args = context.locals();
         if args.len() != 1 {
             panic!("assert() expects only 1 argument");
@@ -687,9 +687,12 @@ mod helius_std {
         use crate::{ExecutionContext, Variant};
         use std::convert::TryFrom;
 
-        pub fn pow(context: &mut ExecutionContext, arg_count: usize) -> usize {
-            if arg_count != 2 {
-                panic!("pow(n, e) expects 2 arguments, {} given.", arg_count);
+        pub fn pow(context: &mut ExecutionContext) -> usize {
+            if context.local_count() != 2 {
+                panic!(
+                    "pow(n, e) expects 2 arguments, {} given.",
+                    context.local_count()
+                );
             }
 
             let args = context.locals();
@@ -781,7 +784,7 @@ impl ExecutionContext {
 
     fn add_native_function<F>(&mut self, name: &str, func: &'static F)
     where
-        F: Fn(&mut ExecutionContext, usize) -> usize,
+        F: Fn(&mut ExecutionContext) -> usize,
     {
         self.variable_set(
             name,
@@ -801,7 +804,7 @@ impl ExecutionContext {
 
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
-                let _return_count = f.clone()(self, args.len());
+                let _return_count = f.clone()(self);
 
                 let stack_base = self.call_info.last().unwrap().stack_base;
                 let local_count = args.len();

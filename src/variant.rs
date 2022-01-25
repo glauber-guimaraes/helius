@@ -22,7 +22,7 @@ pub enum Variant {
 #[derive(Clone)]
 pub struct NativeFunction {
     pub name: String,
-    pub func: &'static dyn Fn(&mut ExecutionContext, usize) -> usize,
+    pub func: &'static dyn Fn(&mut ExecutionContext) -> usize,
 }
 
 impl std::fmt::Debug for NativeFunction {
@@ -32,7 +32,7 @@ impl std::fmt::Debug for NativeFunction {
 }
 
 impl Deref for NativeFunction {
-    type Target = &'static dyn Fn(&mut ExecutionContext, usize) -> usize;
+    type Target = &'static dyn Fn(&mut ExecutionContext) -> usize;
 
     fn deref(&self) -> &Self::Target {
         &self.func

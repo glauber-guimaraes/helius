@@ -1,5 +1,5 @@
 # Helius Language
-**WARNING!** This language learning experience in Rust and should not be used. 
+**WARNING!** This language is a learning experience in Rust and should not be used. 
 
 ## Expected features
 ```lua

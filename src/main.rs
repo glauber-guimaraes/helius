@@ -663,35 +663,36 @@ impl ASTNode for NodeCall {
 }
 
 mod helius_std {
-    use crate::{ExecutionContext, Variant};
+    use crate::ExecutionContext;
 
     pub fn print(context: &mut ExecutionContext, arg_count: usize) -> usize {
         for i in 0..arg_count {
             print!("{}", context.read_local(i));
         }
         println!();
-
         0
     }
 
-    pub fn assert(args: Vec<Variant>) -> Vec<Variant> {
+    pub fn assert(context: &mut ExecutionContext, arg_count: usize) -> usize {
+        let args = context.locals();
         if args.len() != 1 {
             panic!("assert() expects only 1 argument");
         }
 
         assert!(args[0].is_true());
-        Vec::new()
+        0
     }
 
     pub mod math {
-        use crate::Variant;
+        use crate::{ExecutionContext, Variant};
         use std::convert::TryFrom;
 
-        pub fn pow(args: Vec<Variant>) -> Vec<Variant> {
-            if args.len() != 2 {
-                panic!("pow(n, e) expects 2 arguments, {} given.", args.len());
+        pub fn pow(context: &mut ExecutionContext, arg_count: usize) -> usize {
+            if arg_count != 2 {
+                panic!("pow(n, e) expects 2 arguments, {} given.", arg_count);
             }
 
+            let args = context.locals();
             let result = match (&args[0], &args[1]) {
                 (Variant::Number(a), Variant::Number(b)) => {
                     if b.is_negative() {
@@ -703,7 +704,8 @@ mod helius_std {
                 (_, _) => panic!("pow(n, e) can only be used with numeric arguments."),
             };
 
-            vec![Variant::Number(result)]
+            context.push(Variant::Number(result));
+            1
         }
     }
 }
@@ -727,6 +729,7 @@ impl ASTNode for NodeAssignment {
 struct FunctionInfo {
     stack_base: usize,
     local_variables: Vec<String>,
+    arg_count: usize,
 }
 
 #[derive(Default)]
@@ -755,8 +758,21 @@ impl ExecutionContext {
         self.variables.get(name)
     }
 
+    fn local_count(&self) -> usize {
+        self.call_info.last().unwrap().arg_count
+    }
+
     fn read_local(&self, index: usize) -> Variant {
         self.stack[self.call_info.last().unwrap().stack_base + index].clone()
+    }
+
+    fn locals(&self) -> Vec<Variant> {
+        self.stack
+            .iter()
+            .skip(self.call_info.last().unwrap().stack_base)
+            .take(self.call_info.last().unwrap().arg_count)
+            .cloned()
+            .collect()
     }
 
     fn variable_set(&mut self, name: &str, value: Variant) {
@@ -780,11 +796,26 @@ impl ExecutionContext {
         self.call_info.push(FunctionInfo {
             stack_base: self.stack.len() - args.len(),
             local_variables: vec![],
+            arg_count: args.len(),
         });
 
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
-                let _results = f.clone()(self, args.len());
+                let return_count = f.clone()(self, args.len());
+                let return_values: Vec<Variant> = self
+                    .stack
+                    .iter()
+                    .rev()
+                    .take(return_count)
+                    .cloned()
+                    .collect();
+
+                self.stack
+                    .drain(self.call_info.last().unwrap().stack_base..self.stack.len());
+
+                for ret_value in return_values.into_iter() {
+                    self.stack.push(ret_value);
+                }
             }
             Some(Variant::Function(block)) => {
                 let f = self.functions[(*block) as usize].clone();
@@ -839,8 +870,8 @@ fn main() {
     };
 
     context.add_native_function("print", &helius_std::print);
-    // context.add_native_function("assert", &helius_std::assert);
-    // context.add_native_function("pow", &helius_std::math::pow);
+    context.add_native_function("assert", &helius_std::assert);
+    context.add_native_function("pow", &helius_std::math::pow);
 
     let execution_time = Instant::now();
     for stmt in program {

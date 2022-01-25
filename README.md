@@ -33,3 +33,26 @@ myArray[5] = 0
 myStruct = {}
 myStruct.a = 3
 ```
+
+## Implemented so far
+```
+program ::= (<statement> | <newline>)* EOF
+statement ::= (<assignment>  |
+               <funccall>    |
+               <loop>        |
+               <conditional> |
+               <return>      |
+               "continue"    |
+               "break") "\n"
+loop ::= while <expression> do ((<statement> | <newline>)* | end)
+conditional ::= if <expression> then (<statement> | <newline>)* (else <conditional>)? (else (<statement> | <newline>)*)?
+assignment ::= <identifier> "=" <expression>
+funccall ::= <identifier> (<string_literal> | "(" <expression> {"," <expression>} ")")
+funcdefinition ::= function "(" (<identifier> (, <identifier>)*)? ")" (<statement> | <newline>)*
+expression ::= <unary_op> <expression> | <funcdefinition> |
+                <identifier> | <number> | <string> | <boolean> | <none> |
+                <funccall> | <expression> <binary_op> <expression>
+return ::= return (<expression> (, <expression>)*)?
+unary_op ::= "-"
+binary_op ::= "+" | "-" | "*" | "/" | ">" | "<" | ">=" | "<=" | "==" | "!=" 
+```

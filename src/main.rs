@@ -654,26 +654,23 @@ struct NodeCall {
 
 impl ASTNode for NodeCall {
     fn execute(&self, context: &mut ExecutionContext) {
-        // Assume print for now.
         self.args.execute(context);
-        let mut args = vec![];
-        for _ in 0..self.args.0.len() {
-            args.push(context.pop());
-        }
+        let args = self.args.0.iter().map(|_| Variant::None).collect();
 
         context.call_native_function(&self.func, args);
     }
 }
 
 mod helius_std {
-    use crate::Variant;
+    use crate::{ExecutionContext, Variant};
 
-    pub fn print(args: Vec<Variant>) -> Vec<Variant> {
-        for arg in args.iter().rev() {
-            print!("{}", arg);
+    pub fn print(context: &mut ExecutionContext, arg_count: usize) -> usize {
+        for i in 0..arg_count {
+            print!("{}", context.read_local(i));
         }
         println!();
-        Vec::new()
+
+        0
     }
 
     pub fn assert(args: Vec<Variant>) -> Vec<Variant> {
@@ -725,11 +722,18 @@ impl ASTNode for NodeAssignment {
     }
 }
 
+#[derive(Clone)]
+struct FunctionInfo {
+    stack_base: usize,
+    local_variables: Vec<String>,
+}
+
 #[derive(Default)]
-struct ExecutionContext {
+pub struct ExecutionContext {
     variables: HashMap<String, Variant>,
     stack: Vec<Variant>,
     functions: Vec<Rc<NodeFunctionBlock>>,
+    call_info: Vec<FunctionInfo>,
 }
 
 impl ExecutionContext {
@@ -742,7 +746,16 @@ impl ExecutionContext {
     }
 
     fn variable_lookup(&self, name: &str) -> Option<&Variant> {
+        if let Some(call_info) = self.call_info.last() {
+            if let Some(position) = call_info.local_variables.iter().position(|var| var == name) {
+                return Some(&self.stack[call_info.stack_base + position]);
+            }
+        }
         self.variables.get(name)
+    }
+
+    fn read_local(&self, index: usize) -> Variant {
+        self.stack[self.call_info.last().unwrap().stack_base + index].clone()
     }
 
     fn variable_set(&mut self, name: &str, value: Variant) {
@@ -751,7 +764,7 @@ impl ExecutionContext {
 
     fn add_native_function<F>(&mut self, name: &str, func: &'static F)
     where
-        F: Fn(Vec<Variant>) -> Vec<Variant>,
+        F: Fn(&mut ExecutionContext, usize) -> usize,
     {
         self.variable_set(
             name,
@@ -763,34 +776,27 @@ impl ExecutionContext {
     }
 
     fn call_native_function(&mut self, name: &str, args: Vec<Variant>) {
+        self.call_info.push(FunctionInfo {
+            stack_base: self.stack.len() - args.len(),
+            local_variables: vec![],
+        });
+
         match self.variable_lookup(name) {
             Some(Variant::NativeFunction(f)) => {
-                let results = f(args);
-                for result in results.into_iter().rev() {
-                    self.push(result);
-                }
+                let _results = f.clone()(self, args.len());
             }
             Some(Variant::Function(block)) => {
                 let f = self.functions[(*block) as usize].clone();
-                let mut function_scope: HashMap<String, Variant> = self.variables.clone();
+                self.call_info.last_mut().unwrap().local_variables = f.arg_names.clone();
 
-                f.arg_names
-                    .iter()
-                    .zip(args.into_iter())
-                    .for_each(|(name, value)| {
-                        function_scope.insert(name.to_owned(), value);
-                    });
-                f.execute(&mut ExecutionContext {
-                    variables: function_scope,
-                    stack: vec![],
-                    functions: self.functions.clone(),
-                });
+                f.execute(self);
             }
             None => panic!("Trying to call non existent function `{}`", &name),
             _ => {
                 panic!("Trying to call variable which is non callable");
             }
         };
+        self.call_info.pop();
     }
 }
 
@@ -826,11 +832,12 @@ fn main() {
         variables: HashMap::new(),
         stack: vec![],
         functions: parser.functions.into_iter().map(Rc::new).collect(),
+        call_info: vec![],
     };
 
     context.add_native_function("print", &helius_std::print);
-    context.add_native_function("assert", &helius_std::assert);
-    context.add_native_function("pow", &helius_std::math::pow);
+    // context.add_native_function("assert", &helius_std::assert);
+    // context.add_native_function("pow", &helius_std::math::pow);
 
     for stmt in program {
         stmt.execute(&mut context);

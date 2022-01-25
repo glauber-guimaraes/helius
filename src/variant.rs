@@ -3,7 +3,10 @@ use std::{
     ops::{self, Deref},
 };
 
-use crate::tokenizer::{Token, TokenType};
+use crate::{
+    tokenizer::{Token, TokenType},
+    ExecutionContext,
+};
 
 #[derive(Debug, Clone)]
 pub enum Variant {
@@ -19,7 +22,7 @@ pub enum Variant {
 #[derive(Clone)]
 pub struct NativeFunction {
     pub name: String,
-    pub func: &'static dyn Fn(Vec<Variant>) -> Vec<Variant>,
+    pub func: &'static dyn Fn(&mut ExecutionContext, usize) -> usize,
 }
 
 impl std::fmt::Debug for NativeFunction {
@@ -29,7 +32,7 @@ impl std::fmt::Debug for NativeFunction {
 }
 
 impl Deref for NativeFunction {
-    type Target = &'static dyn Fn(Vec<Variant>) -> Vec<Variant>;
+    type Target = &'static dyn Fn(&mut ExecutionContext, usize) -> usize;
 
     fn deref(&self) -> &Self::Target {
         &self.func

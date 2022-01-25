@@ -5,6 +5,7 @@ use std::{
     env::{self},
     fmt, fs, process,
     rc::Rc,
+    time::Instant,
 };
 
 mod tokenizer;
@@ -827,7 +828,9 @@ fn main() {
     let tokenizer = Tokenizer::new(program_source);
     let mut parser = Parser::new(tokenizer);
 
+    let parser_time = Instant::now();
     let program = parser.parse();
+    let parser_time = parser_time.elapsed().as_secs_f64();
     let mut context = ExecutionContext {
         variables: HashMap::new(),
         stack: vec![],
@@ -839,7 +842,12 @@ fn main() {
     // context.add_native_function("assert", &helius_std::assert);
     // context.add_native_function("pow", &helius_std::math::pow);
 
+    let execution_time = Instant::now();
     for stmt in program {
         stmt.execute(&mut context);
     }
+    let execution_time = execution_time.elapsed().as_secs_f64();
+
+    println!("\n> Parsing took {:.3}ms", parser_time * 1000.0);
+    println!("> Execution took {:.3}ms", execution_time * 1000.0);
 }

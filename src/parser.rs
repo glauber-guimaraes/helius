@@ -36,27 +36,6 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Vec<Box<dyn ASTNode>> {
-        self.program()
-    }
-
-    fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult<Token> {
-        let current = self.current.as_ref().unwrap().clone();
-        if !self.match_and_advance(token_type) {
-            return self.create_error_at_token(
-                self.current.as_ref().unwrap(),
-                &format!(
-                    "Expected token {:?} got {:?}\n{}",
-                    token_type,
-                    self.current.as_ref().unwrap(),
-                    msg
-                ),
-                "expected here",
-            );
-        }
-        Ok(current)
-    }
-
-    fn program(&mut self) -> Vec<Box<dyn ASTNode>> {
         let mut statements: Vec<Box<dyn ASTNode>> = vec![];
 
         self.advance();
@@ -82,6 +61,23 @@ impl Parser {
         }
 
         statements
+    }
+
+    fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult<Token> {
+        let current = self.current.as_ref().unwrap().clone();
+        if !self.match_and_advance(token_type) {
+            return self.create_error_at_token(
+                self.current.as_ref().unwrap(),
+                &format!(
+                    "Expected token {:?} got {:?}\n{}",
+                    token_type,
+                    self.current.as_ref().unwrap(),
+                    msg
+                ),
+                "expected here",
+            );
+        }
+        Ok(current)
     }
 
     fn recover_from_error(&mut self) {
@@ -112,10 +108,6 @@ impl Parser {
         }
     }
 
-    /// A statement can be either an assignment or function call followed by a newline:
-    /// statement ::= (<assignment> | <funccall>) "\n"
-    /// assignment ::= <identifier> "=" <expression>
-    /// funccall ::= <identifier> (<string_literal> | "(" <expression> {"," <expression>} ")")
     fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
         let ident = self.consume();
 

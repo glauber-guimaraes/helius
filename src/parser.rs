@@ -328,14 +328,6 @@ impl Parser {
             return self.parse_function_definition();
         }
 
-        if lhs.is_type(TokenType::LeftParenthesis) {
-            let parenthesis_expression = self.parse_expression(Precedence::Assignment as u32);
-
-            self.expect(TokenType::RightParenthesis, "Expected `)` after `(` token")?;
-
-            return parenthesis_expression;
-        }
-
         if !lhs.is_any_type(&[
             TokenType::Identifier,
             TokenType::Number,
@@ -343,6 +335,7 @@ impl Parser {
             TokenType::String,
             TokenType::Boolean,
             TokenType::None,
+            TokenType::LeftParenthesis,
         ]) {
             return self.create_error_at_token(
                 &lhs,
@@ -351,13 +344,17 @@ impl Parser {
             );
         }
 
-        let mut expr_node: Box<dyn ASTNode>;
-
-        if lhs.is_type(TokenType::Identifier) && self.peek_type() == TokenType::LeftParenthesis {
-            expr_node = self.parse_function_call(lhs, Some(1))?;
+        let mut expr_node: Box<dyn ASTNode> = if lhs.is_type(TokenType::LeftParenthesis) {
+            let parenthesis_expression = self.parse_expression(Precedence::Assignment as u32)?;
+            self.expect(TokenType::RightParenthesis, "Expected `)` after `(` token")?;
+            parenthesis_expression
+        } else if lhs.is_type(TokenType::Identifier)
+            && self.peek_type() == TokenType::LeftParenthesis
+        {
+            self.parse_function_call(lhs, Some(1))?
         } else {
-            expr_node = Box::new(NodeVariant(lhs.into()));
-        }
+            Box::new(NodeVariant(lhs.into()))
+        };
 
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {

@@ -96,12 +96,7 @@ impl Parser {
     fn recover_from_error(&mut self) {
         self.has_error = true;
 
-        while !self
-            .current
-            .as_ref()
-            .unwrap()
-            .is_any_type(&[TokenType::Newline, TokenType::Eof])
-        {
+        while [TokenType::Newline, TokenType::Eof].contains(&self.peek_type()) {
             self.consume();
         }
     }
@@ -132,12 +127,7 @@ impl Parser {
             };
 
             if result.is_err() {
-                while !self
-                    .current
-                    .as_ref()
-                    .unwrap()
-                    .is_any_type(&[TokenType::End, TokenType::Eof])
-                {
+                while [TokenType::End, TokenType::Eof].contains(&self.peek_type()) {
                     self.consume();
                 }
             }

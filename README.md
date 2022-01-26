@@ -36,7 +36,8 @@ myStruct.a = 3
 
 ## Implemented so far
 ```
-program ::= (<statement> | <newline>)* EOF
+program ::= <block> EOF
+block ::= (<statement> | <newline>)*
 statement ::= (<assignment>  |
                <funccall>    |
                <loop>        |
@@ -44,11 +45,11 @@ statement ::= (<assignment>  |
                <return>      |
                "continue"    |
                "break") "\n"
-loop ::= while <expression> do ((<statement> | <newline>)* | end)
-conditional ::= if <expression> then (<statement> | <newline>)* (else <conditional>)? (else (<statement> | <newline>)*)?
+loop ::= while <expression> do <block> end
+conditional ::= if <expression> then block (else <conditional>)? (else block)? end
 assignment ::= <identifier> "=" <expression>
 funccall ::= <identifier> (<string_literal> | "(" <expression> {"," <expression>} ")")
-funcdefinition ::= function "(" (<identifier> (, <identifier>)*)? ")" (<statement> | <newline>)*
+funcdefinition ::= function "(" (<identifier> (, <identifier>)*)? ")" block end
 expression ::= <unary_op> <expression> | <funcdefinition> |
                 <identifier> | <number> | <string> | <boolean> | <none> |
                 <funccall> | <expression> <binary_op> <expression>

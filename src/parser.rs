@@ -36,9 +36,19 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Vec<Box<dyn ASTNode>> {
+        self.advance();
+        let block = self.parse_block();
+        assert_eq!(
+            self.peek_type(),
+            TokenType::Eof,
+            "parser should stop at eof"
+        );
+        block
+    }
+
+    fn parse_block(&mut self) -> Vec<Box<dyn ASTNode>> {
         let mut statements: Vec<Box<dyn ASTNode>> = vec![];
 
-        self.advance();
         loop {
             while self.match_and_advance(TokenType::Newline) {}
 
@@ -46,11 +56,14 @@ impl Parser {
                 break;
             }
 
-            match self.parse_statement() {
-                Ok(stmt) => statements.push(stmt),
-                Err(e) => {
+            match self.try_parse_statement() {
+                Some(Ok(stmt)) => statements.push(stmt),
+                Some(Err(e)) => {
                     self.print_error(e);
                     self.recover_from_error();
+                }
+                None => {
+                    break;
                 }
             }
         }
@@ -108,11 +121,11 @@ impl Parser {
         }
     }
 
-    fn parse_statement(&mut self) -> ParserResult<Box<dyn ASTNode>> {
-        let ident = self.consume();
+    fn try_parse_statement(&mut self) -> Option<ParserResult<Box<dyn ASTNode>>> {
+        let current_type = self.peek_type();
 
-        if ident.is_any_type(&[TokenType::If, TokenType::While]) {
-            let result = match ident.r#type {
+        if [TokenType::If, TokenType::While].contains(&current_type) {
+            let result = match current_type {
                 TokenType::If => self.parse_conditional(),
                 TokenType::While => self.parse_loop(),
                 _ => unreachable!(),
@@ -129,138 +142,68 @@ impl Parser {
                 }
             }
 
-            return result;
+            return Some(result);
         }
 
-        if ident.is_type(TokenType::Return) {
-            return self.parse_return();
+        if current_type == TokenType::Return {
+            return Some(self.parse_return());
         }
 
-        if ident.is_type(TokenType::Continue) {
-            return Ok(Box::new(NodeContinue {}));
+        if current_type == TokenType::Continue {
+            self.advance();
+            return Some(Ok(Box::new(NodeContinue)));
         }
 
-        if ident.is_type(TokenType::Break) {
-            return Ok(Box::new(NodeBreak {}));
+        if current_type == TokenType::Break {
+            self.advance();
+            return Some(Ok(Box::new(NodeBreak)));
         }
 
-        if !ident.is_type(TokenType::Identifier) {
-            return self.create_error_at_token(
-                &ident,
-                &format!("Unexpected statement start `{}`", ident),
-                "",
-            );
+        if current_type != TokenType::Identifier {
+            return None;
         }
 
+        let ident = self.consume();
         if self.match_and_advance(TokenType::Assignment) {
-            return self.parse_assignment(ident);
+            return Some(self.parse_assignment(ident));
         }
 
         let current_type = self.current.as_ref().unwrap().r#type;
         if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
-            return self.parse_function_call(ident, Some(0));
+            return Some(self.parse_function_call(ident, Some(0)));
         }
 
-        return self.create_error_at_token(
-            self.current.as_ref().unwrap(),
-            &format!(
-                "Expected assignment or function call, found `{}`",
-                self.current.as_ref().unwrap()
-            ),
-            "expected here",
+        unreachable!(
+            "if control reaches here, we didn't properly detect an error. Current token is {:?}",
+            ident
         );
     }
 
     fn parse_loop(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        self.expect(TokenType::While, "")?;
         let condition = self.parse_expression(Precedence::Assignment as u32)?;
         self.expect(TokenType::Do, "")?;
-
-        let mut block: Vec<Box<dyn ASTNode>> = vec![];
-
-        loop {
-            while self.match_and_advance(TokenType::Newline) {}
-
-            if self.match_and_advance(TokenType::Eof) {
-                break;
-            }
-
-            if self.match_and_advance(TokenType::End) {
-                break;
-            }
-
-            match self.parse_statement() {
-                Ok(stmt) => block.push(stmt),
-                Err(e) => {
-                    self.print_error(e);
-                    self.recover_from_error();
-                }
-            }
-        }
+        let block = self.parse_block();
+        self.expect(TokenType::End, "a loop must end with an `end`")?;
 
         Ok(Box::new(NodeLoop { condition, block }))
     }
 
     fn parse_conditional(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        self.expect(TokenType::If, "")?;
         let condition = self.parse_expression(Precedence::Assignment as u32)?;
         self.expect(TokenType::Then, "")?;
 
-        let mut true_block = vec![];
+        let true_block = self.parse_block();
         let mut false_block = vec![];
-        let mut parsing_block = &mut true_block;
-
-        let mut has_else_block = false;
-
-        loop {
-            while self.match_and_advance(TokenType::Newline) {}
-
-            if self.match_and_advance(TokenType::Eof) {
-                break;
-            }
-
-            if self.match_and_advance(TokenType::End) {
-                break;
-            }
-
-            if self.current.as_ref().unwrap().is_type(TokenType::Else) {
-                let else_token = self.current.to_owned().unwrap();
-                self.advance();
-
-                match (has_else_block, self.current.as_ref().unwrap().r#type) {
-                    (true, TokenType::If) => {
-                        return self.create_error_at_token(
-                            &else_token,
-                            "Conditional block cannot have `else if` defined after `else`",
-                            "branch started here",
-                        )
-                    }
-                    (true, _) => {
-                        return self.create_error_at_token(
-                            &else_token,
-                            "Conditional block cannot have multiple `else` branches",
-                            "branch started here",
-                        )
-                    }
-                    (_, _) => {}
-                };
-
-                if self.match_and_advance(TokenType::If) {
-                    let elseif = self.parse_conditional()?;
-                    false_block.push(elseif);
-                    break;
-                }
-                has_else_block = true;
-                parsing_block = &mut false_block;
-                continue;
-            }
-
-            match self.parse_statement() {
-                Ok(stmt) => parsing_block.push(stmt),
-                Err(e) => {
-                    self.print_error(e);
-                    self.recover_from_error();
-                }
+        if self.match_and_advance(TokenType::Else) {
+            if self.peek_type() == TokenType::If {
+                false_block.push(self.parse_conditional()?);
+            } else {
+                false_block = self.parse_block();
             }
         }
+        self.match_and_advance(TokenType::End);
 
         Ok(Box::new(NodeConditional {
             condition,
@@ -364,32 +307,11 @@ impl Parser {
         }
         let args: Vec<String> = args.into_iter().map(|arg| arg.lexeme).collect();
 
-        let mut block = vec![];
-
-        loop {
-            while self.match_and_advance(TokenType::Newline) {}
-
-            if self.match_and_advance(TokenType::Eof) {
-                return Err(ParserError {
-                    msg: "Reached end of file while parsing function definition".to_string(),
-                    short_msg: "".to_string(),
-                    line: 0,
-                    column: 0,
-                });
-            }
-
-            if self.match_and_advance(TokenType::End) {
-                break;
-            }
-
-            match self.parse_statement() {
-                Ok(stmt) => block.push(stmt),
-                Err(e) => {
-                    self.print_error(e);
-                    self.recover_from_error();
-                }
-            }
-        }
+        let mut block = self.parse_block();
+        self.expect(
+            TokenType::End,
+            "a function definition must end with an `end`",
+        )?;
 
         block.push(Box::new(NodeReturn {
             args: NodeExpressionList(vec![]),
@@ -516,6 +438,7 @@ impl Parser {
     }
 
     fn parse_return(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        self.expect(TokenType::Return, "")?;
         let mut args = NodeExpressionList(vec![]);
 
         if self.peek_type() != TokenType::Newline {

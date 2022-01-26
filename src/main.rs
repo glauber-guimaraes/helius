@@ -18,14 +18,14 @@ mod variant;
 use variant::{NativeFunction, Variant};
 
 #[derive(PartialEq, Debug)]
-enum ContinuationFlow {
+pub enum ContinuationFlow {
     Normal,
     Return,
     Break,
     Continue,
 }
 
-trait ASTNode {
+pub trait ASTNode {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow;
 }
 

@@ -147,14 +147,10 @@ impl Parser {
 
         if current_type == TokenType::Return {
             return Some(self.parse_return());
-        }
-
-        if current_type == TokenType::Continue {
+        } else if current_type == TokenType::Continue {
             self.advance();
             return Some(Ok(Box::new(NodeContinue)));
-        }
-
-        if current_type == TokenType::Break {
+        } else if current_type == TokenType::Break {
             self.advance();
             return Some(Ok(Box::new(NodeBreak)));
         }

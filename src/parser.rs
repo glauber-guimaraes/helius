@@ -339,6 +339,7 @@ impl Parser {
         if !lhs.is_any_type(&[
             TokenType::Identifier,
             TokenType::Number,
+            TokenType::Float,
             TokenType::String,
             TokenType::Boolean,
             TokenType::None,

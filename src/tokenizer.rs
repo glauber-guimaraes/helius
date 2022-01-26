@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum TokenType {
     Identifier,
     Number,
+    Float,
     String,
     Boolean,
     Assignment,
@@ -239,9 +240,19 @@ impl Tokenizer {
     fn parse_number(&mut self) -> Token {
         let mut token = self.create_token(TokenType::Number, "");
         let mut number_str = String::new();
-        while !self.is_eof() && self.source[self.index].is_ascii_alphanumeric() {
+        while !self.is_eof() && self.source[self.index].is_ascii_digit() {
             number_str.push(self.source[self.index]);
             self.advance();
+        }
+        if !self.is_eof() && self.source[self.index] == '.' {
+            self.advance();
+            number_str.push('.');
+            token.r#type = TokenType::Float;
+
+            while !self.is_eof() && self.source[self.index].is_ascii_digit() {
+                number_str.push(self.source[self.index]);
+                self.advance();
+            }
         }
         token.lexeme = number_str;
         token

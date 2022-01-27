@@ -190,13 +190,13 @@ impl ASTNode for NodeBinaryOperation {
 
 struct NodeGetIndex {
     base: Box<dyn ASTNode>,
-    name: String,
+    name: Box<dyn ASTNode>,
 }
 
 impl ASTNode for NodeGetIndex {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.base.execute(context);
-        context.push(Variant::String(self.name.clone()));
+        self.name.execute(context);
         context.get_index();
 
         ContinuationFlow::Normal
@@ -281,6 +281,17 @@ mod helius_std {
 
     pub fn map(context: &mut ExecutionContext) -> usize {
         context.push(Variant::Map(Rc::new(HashMap::new())));
+        1
+    }
+
+    pub fn range(context: &mut ExecutionContext) -> usize {
+        let n = match context.read_local(0) {
+            Variant::Number(n) => n,
+            _ => panic!("function range expects a numeric argument"),
+        };
+        context.push(Variant::Array(Rc::new(
+            (0..n).map(Variant::Number).collect(),
+        )));
         1
     }
 
@@ -533,6 +544,7 @@ fn main() {
     context.add_native_function("assert", &helius_std::assert);
     context.add_native_function("pow", &helius_std::math::pow);
     context.add_native_function("map", &helius_std::map);
+    context.add_native_function("range", &helius_std::range);
 
     let math_module = HashMap::from_iter(
         [

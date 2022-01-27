@@ -33,6 +33,8 @@ pub enum TokenType {
     Return,
     Comma,
     Period,
+    LeftBracket,
+    RightBracket,
     Newline,
     Eof,
 }
@@ -184,6 +186,8 @@ impl Tokenizer {
                 '(' => Ok(self.create_token(TokenType::LeftParenthesis, "(")),
                 ')' => Ok(self.create_token(TokenType::RightParenthesis, ")")),
                 '"' => Ok(self.parse_string()),
+                '[' => Ok(self.create_token(TokenType::LeftBracket, "[")),
+                ']' => Ok(self.create_token(TokenType::RightBracket, "]")),
                 '#' => {
                     self.consume_comment();
                     return self.next();

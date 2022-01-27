@@ -1,6 +1,17 @@
 # Helius Language
 **WARNING!** This language is a learning experience in Rust and should not be used. 
 
+## TODO
+* Add iteration
+```python
+for i in range(5) do
+```
+* Add local variables
+* Add closures
+* Add iterators
+* Add metamethods
+* Implement bytecode vm
+
 ## Expected features
 ```lua
 # Single line comments

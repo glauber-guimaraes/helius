@@ -262,7 +262,9 @@ impl Tokenizer {
         let mut token = self.create_token(TokenType::Identifier, "");
         let mut ident = String::new();
 
-        while !self.is_eof() && self.source[self.index].is_ascii_alphanumeric() {
+        while !self.is_eof()
+            && (self.source[self.index].is_ascii_alphanumeric() || self.source[self.index] == '_')
+        {
             let chr = self.source[self.index];
             ident.push(chr);
             self.advance();

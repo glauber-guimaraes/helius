@@ -218,7 +218,7 @@ impl ASTNode for NodeExpressionList {
 }
 
 struct NodeCall {
-    func: String,
+    func: Box<dyn ASTNode>,
     args: NodeExpressionList,
     expected_return_count: Option<usize>,
 }
@@ -227,8 +227,9 @@ impl ASTNode for NodeCall {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.args.execute(context);
         let args = self.args.0.iter().map(|_| Variant::None).collect();
+        self.func.execute(context);
 
-        context.call_native_function(&self.func, args, self.expected_return_count);
+        context.call_native_function(args, self.expected_return_count);
 
         ContinuationFlow::Normal
     }
@@ -248,7 +249,7 @@ mod helius_std {
     pub fn assert(context: &mut ExecutionContext) -> usize {
         let args = context.locals();
         if args.len() != 1 {
-            panic!("assert() expects only 1 argument");
+            panic!("assert() expects 1 argument");
         }
 
         assert!(args[0].is_true());
@@ -369,12 +370,8 @@ impl ExecutionContext {
         );
     }
 
-    fn call_native_function(
-        &mut self,
-        name: &str,
-        args: Vec<Variant>,
-        expect_return_count: Option<usize>,
-    ) {
+    fn call_native_function(&mut self, args: Vec<Variant>, expect_return_count: Option<usize>) {
+        let function = self.pop();
         self.call_info.push(FunctionInfo {
             stack_base: self.stack.len() - args.len(),
             local_variables: vec![],
@@ -383,12 +380,12 @@ impl ExecutionContext {
 
         let return_count;
 
-        match self.variable_lookup(name) {
-            Some(Variant::NativeFunction(f)) => {
-                return_count = f.clone()(self);
+        match function {
+            Variant::NativeFunction(f) => {
+                return_count = f(self);
             }
-            Some(Variant::Function(block)) => {
-                let f = self.functions[(*block) as usize].clone();
+            Variant::Function(block) => {
+                let f = self.functions[block as usize].clone();
                 self.call_info.last_mut().unwrap().local_variables = f.arg_names.clone();
 
                 f.execute(self);
@@ -398,9 +395,8 @@ impl ExecutionContext {
                     panic!("Return count is not a number");
                 }
             }
-            None => panic!("Trying to call non existent function `{}`", &name),
             _ => {
-                panic!("Trying to call variable which is non callable");
+                panic!("Trying to call {:?} which is non callable.", function);
             }
         };
         let stack_base = self.call_info.last().unwrap().stack_base;

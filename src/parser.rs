@@ -154,9 +154,12 @@ impl Parser {
             return Some(self.parse_assignment(ident));
         }
 
-        let current_type = self.current.as_ref().unwrap().r#type;
+        let current_type = self.peek_type();
         if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
-            return Some(self.parse_function_call(ident, Some(0)));
+            return match self.parse_function_call(Box::new(NodeVariant(ident.into())), Some(0)) {
+                Ok(call) => Some(Ok(Box::new(call))),
+                Err(err) => Some(Err(err)),
+            };
         }
 
         unreachable!(
@@ -208,47 +211,47 @@ impl Parser {
 
     fn parse_function_call(
         &mut self,
-        ident: Token,
+        prefix: Box<dyn ASTNode>,
         expected_return_count: Option<usize>,
-    ) -> ParserResult<Box<dyn ASTNode>> {
-        if self.current.as_ref().unwrap().is_type(TokenType::String) {
-            let arg = self.consume();
-            let mut args = NodeExpressionList(vec![]);
-            args.push(Box::new(NodeVariant(arg.into())));
-            return Ok(Box::new(NodeCall {
-                func: ident.lexeme,
-                args,
-                expected_return_count,
-            }));
-        }
-
-        self.expect(
-            TokenType::LeftParenthesis,
-            "Expected `(` at the start of function call",
-        )?;
-
+    ) -> ParserResult<NodeCall> {
         let mut args = NodeExpressionList(vec![]);
+        if self.peek_type() == TokenType::String {
+            let arg = self.consume();
+            args.push(Box::new(NodeVariant(arg.into())));
+        } else {
+            self.expect(
+                TokenType::LeftParenthesis,
+                "Expected `(` at the start of function call",
+            )?;
 
-        if !self.match_and_advance(TokenType::RightParenthesis) {
-            let expression = self.parse_expression(Precedence::Assignment as u32)?;
-            args.push(expression);
-
-            while self.match_and_advance(TokenType::Comma) {
+            if !self.match_and_advance(TokenType::RightParenthesis) {
                 let expression = self.parse_expression(Precedence::Assignment as u32)?;
                 args.push(expression);
-            }
 
-            self.expect(
-                TokenType::RightParenthesis,
-                "Expected `)` at the end of function call",
-            )?;
+                while self.match_and_advance(TokenType::Comma) {
+                    let expression = self.parse_expression(Precedence::Assignment as u32)?;
+                    args.push(expression);
+                }
+
+                self.expect(
+                    TokenType::RightParenthesis,
+                    "Expected `)` at the end of function call",
+                )?;
+            }
         }
 
-        Ok(Box::new(NodeCall {
-            func: ident.lexeme,
+        let mut call = NodeCall {
+            func: prefix,
             args,
             expected_return_count,
-        }))
+        };
+
+        if self.peek_type() == TokenType::String || self.peek_type() == TokenType::LeftParenthesis {
+            call.expected_return_count = Some(1);
+            self.parse_function_call(Box::new(call), expected_return_count)
+        } else {
+            Ok(call)
+        }
     }
 
     fn create_error_at_token<T>(
@@ -349,9 +352,10 @@ impl Parser {
             self.expect(TokenType::RightParenthesis, "Expected `)` after `(` token")?;
             parenthesis_expression
         } else if lhs.is_type(TokenType::Identifier)
-            && self.peek_type() == TokenType::LeftParenthesis
+            && (self.peek_type() == TokenType::LeftParenthesis
+                || self.peek_type() == TokenType::String)
         {
-            self.parse_function_call(lhs, Some(1))?
+            Box::new(self.parse_function_call(Box::new(NodeVariant(lhs.into())), Some(1))?)
         } else {
             Box::new(NodeVariant(lhs.into()))
         };

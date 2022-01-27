@@ -28,3 +28,7 @@ add(3, 2)
 noreturn = function() end
 
 print(noreturn())
+
+get_printer = function() return print end
+get_printer() "This looks weird but works"
+get_printer()("This also looks weird and also works")

@@ -4,8 +4,8 @@ use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
     ASTNode, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall, NodeConditional,
-    NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeLoop, NodeReturn, NodeUnaryOperation,
-    NodeVariant,
+    NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop, NodeReturn,
+    NodeUnaryOperation, NodeVariant,
 };
 
 pub struct Parser {
@@ -356,6 +356,15 @@ impl Parser {
                 || self.peek_type() == TokenType::String)
         {
             Box::new(self.parse_function_call(Box::new(NodeVariant(lhs.into())), Some(1))?)
+        } else if lhs.is_type(TokenType::Identifier) && self.peek_type() == TokenType::Period {
+            let node = self.parse_get_index(Box::new(NodeVariant(lhs.into())))?;
+            if self.peek_type() == TokenType::LeftParenthesis
+                || self.peek_type() == TokenType::String
+            {
+                Box::new(self.parse_function_call(node, Some(1))?)
+            } else {
+                node
+            }
         } else {
             Box::new(NodeVariant(lhs.into()))
         };
@@ -438,5 +447,30 @@ impl Parser {
         }
 
         Ok(Box::new(NodeReturn { args }))
+    }
+
+    fn parse_get_index(&mut self, base: Box<dyn ASTNode>) -> ParserResult<Box<dyn ASTNode>> {
+        self.expect(TokenType::Period, "")?;
+
+        if self.peek_type() != TokenType::Identifier {
+            return self.create_error_at_token(
+                self.current.as_ref().unwrap(),
+                "object index must be a valid identifier",
+                "here",
+            );
+        }
+
+        let ident = self.consume();
+
+        let node = Box::new(NodeGetIndex {
+            base,
+            name: ident.lexeme,
+        });
+
+        if self.peek_type() == TokenType::Period {
+            self.parse_get_index(node)
+        } else {
+            Ok(node)
+        }
     }
 }

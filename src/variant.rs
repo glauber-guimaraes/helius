@@ -1,6 +1,9 @@
 use std::{
-    cmp, fmt,
+    cmp,
+    collections::HashMap,
+    fmt,
     ops::{self, Deref},
+    rc::Rc,
 };
 
 use crate::{
@@ -17,6 +20,8 @@ pub enum Variant {
     Boolean(bool),
     NativeFunction(NativeFunction),
     Function(u32),
+    Map(Rc<HashMap<String, Variant>>),
+    Array(Rc<Vec<Variant>>),
     None,
 }
 
@@ -67,6 +72,8 @@ impl fmt::Display for Variant {
             Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
             Variant::None => f.write_str("None"),
             Variant::Function(_) => f.write_str("<Function>"),
+            Variant::Map(_) => f.write_str("<Map>"),
+            Variant::Array(array) => f.write_fmt(format_args!("<Array[{}]>", array.len())),
         }
     }
 }
@@ -93,6 +100,8 @@ impl cmp::PartialEq for Variant {
             (Self::Float(n0), Self::Float(n1)) => n0 == n1,
             (Self::Number(n0), Self::Float(n1)) => *n0 as f32 == *n1,
             (Self::Float(n0), Self::Number(n1)) => *n0 == *n1 as f32,
+            (Self::Map(m1), Self::Map(m2)) => m1 == m2,
+            (Self::Array(a1), Self::Array(a2)) => a1 == a2,
             (Self::None, Self::None) => true,
             (_, Self::None) => false,
             (Self::None, _) => false,
@@ -124,6 +133,9 @@ impl ops::Add for Variant {
             (Self::Float(lhs), Self::Float(rhs)) => Variant::Float(*lhs + *rhs),
             (Self::Number(lhs), Self::Float(rhs)) => Variant::Float(*lhs as f32 + *rhs),
             (Self::Float(lhs), Self::Number(rhs)) => Variant::Float(*lhs + *rhs as f32),
+            (Self::Array(lhs), Self::Array(rhs)) => {
+                Variant::Array(Rc::new(lhs.iter().chain(rhs.iter()).cloned().collect()))
+            }
             _ => {
                 panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
             }

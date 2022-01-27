@@ -32,6 +32,7 @@ pub enum TokenType {
     Continue,
     Return,
     Comma,
+    Period,
     Newline,
     Eof,
 }
@@ -178,6 +179,7 @@ impl Tokenizer {
                 '*' => Ok(self.create_token(TokenType::Mul, "*")),
                 '/' => Ok(self.create_token(TokenType::Div, "/")),
                 ',' => Ok(self.create_token(TokenType::Comma, ",")),
+                '.' => Ok(self.create_token(TokenType::Period, ".")),
                 '<' | '>' | '=' | '!' => self.parse_relational_token(chr),
                 '(' => Ok(self.create_token(TokenType::LeftParenthesis, "(")),
                 ')' => Ok(self.create_token(TokenType::RightParenthesis, ")")),

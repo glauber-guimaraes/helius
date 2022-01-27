@@ -3,7 +3,10 @@
 use std::{
     collections::HashMap,
     env::{self},
-    fmt, fs, iter, process,
+    fmt, fs,
+    iter::{self, FromIterator},
+    ops::Index,
+    process,
     rc::Rc,
     time::Instant,
 };
@@ -185,14 +188,32 @@ impl ASTNode for NodeBinaryOperation {
     }
 }
 
+struct NodeGetIndex {
+    base: Box<dyn ASTNode>,
+    name: String,
+}
+
+impl ASTNode for NodeGetIndex {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        self.base.execute(context);
+        context.push(Variant::String(self.name.clone()));
+        context.get_index();
+
+        ContinuationFlow::Normal
+    }
+}
+
 struct NodeVariant(Variant);
 
 impl ASTNode for NodeVariant {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         match &self.0 {
-            Variant::Identifier(ident) => {
-                context.push(context.variable_lookup(ident).unwrap().clone())
-            }
+            Variant::Identifier(ident) => context.push(
+                context
+                    .variable_lookup(ident)
+                    .unwrap_or(&Variant::None)
+                    .clone(),
+            ),
             _ => context.push(self.0.clone()),
         }
 
@@ -236,7 +257,9 @@ impl ASTNode for NodeCall {
 }
 
 mod helius_std {
-    use crate::ExecutionContext;
+    use std::{collections::HashMap, rc::Rc};
+
+    use crate::{variant::Variant, ExecutionContext};
 
     pub fn print(context: &mut ExecutionContext) -> usize {
         for arg in context.locals() {
@@ -254,6 +277,11 @@ mod helius_std {
 
         assert!(args[0].is_true());
         0
+    }
+
+    pub fn map(context: &mut ExecutionContext) -> usize {
+        context.push(Variant::Map(Rc::new(HashMap::new())));
+        1
     }
 
     pub mod math {
@@ -281,6 +309,34 @@ mod helius_std {
             };
 
             context.push(Variant::Number(result));
+            1
+        }
+
+        pub fn sin(context: &mut ExecutionContext) -> usize {
+            let arg = context.read_local(0);
+            let result = Variant::Float(match &arg {
+                Variant::Number(n) => f32::sin(*n as f32),
+                Variant::Float(f) => f32::sin(*f),
+                _ => panic!(
+                    "function math.sin expects a numeric argument, got {:?}",
+                    arg
+                ),
+            });
+            context.push(result);
+            1
+        }
+
+        pub fn cos(context: &mut ExecutionContext) -> usize {
+            let arg = context.read_local(0);
+            let result = Variant::Float(match &arg {
+                Variant::Number(n) => f32::cos(*n as f32),
+                Variant::Float(f) => f32::cos(*f),
+                _ => panic!(
+                    "function math.sin expects a numeric argument, got {:?}",
+                    arg
+                ),
+            });
+            context.push(result);
             1
         }
     }
@@ -421,6 +477,19 @@ impl ExecutionContext {
 
         self.call_info.pop();
     }
+
+    fn get_index(&mut self) {
+        let index = self.pop();
+        let object = self.pop();
+
+        let result = match (&object, &index) {
+            (Variant::Map(map), Variant::String(i)) => map.get(i).unwrap_or(&Variant::None).clone(),
+            (Variant::Array(array), Variant::Number(i)) => array.index(*i as usize).clone(),
+            _ => panic!("attempt to index a {:?} with {:?}", object, index),
+        };
+
+        self.push(result);
+    }
 }
 
 fn show_usage(program_name: &str, error_msg: &str) {
@@ -463,6 +532,23 @@ fn main() {
     context.add_native_function("print", &helius_std::print);
     context.add_native_function("assert", &helius_std::assert);
     context.add_native_function("pow", &helius_std::math::pow);
+    context.add_native_function("map", &helius_std::map);
+
+    let math_module = HashMap::from_iter(
+        [
+            NativeFunction {
+                name: "sin".to_owned(),
+                func: &helius_std::math::sin,
+            },
+            NativeFunction {
+                name: "cos".to_owned(),
+                func: &helius_std::math::cos,
+            },
+        ]
+        .iter()
+        .map(|f| (f.name.clone(), Variant::NativeFunction(f.clone()))),
+    );
+    context.variable_set("math", Variant::Map(Rc::new(math_module)));
 
     let execution_time = Instant::now();
     for stmt in program {

@@ -26,7 +26,7 @@ while variable < 3 do
 end
 
 # conditionals
-if variable > 0 do
+if variable > 0 then
     print("Hello world")
 end
 

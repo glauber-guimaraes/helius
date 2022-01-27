@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
-    env::{self},
-    fmt, fs,
+    env, fmt, fs,
     iter::{self, FromIterator},
     ops::Index,
     process,
@@ -188,6 +188,23 @@ impl ASTNode for NodeBinaryOperation {
     }
 }
 
+struct NodeSetIndex {
+    base: Box<dyn ASTNode>,
+    index: Box<dyn ASTNode>,
+    value: Box<dyn ASTNode>,
+}
+
+impl ASTNode for NodeSetIndex {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        self.base.execute(context);
+        self.index.execute(context);
+        self.value.execute(context);
+        context.set_index();
+
+        ContinuationFlow::Normal
+    }
+}
+
 struct NodeGetIndex {
     base: Box<dyn ASTNode>,
     name: Box<dyn ASTNode>,
@@ -257,7 +274,7 @@ impl ASTNode for NodeCall {
 }
 
 mod helius_std {
-    use std::{collections::HashMap, rc::Rc};
+    use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
     use crate::{variant::Variant, ExecutionContext};
 
@@ -280,7 +297,7 @@ mod helius_std {
     }
 
     pub fn map(context: &mut ExecutionContext) -> usize {
-        context.push(Variant::Map(Rc::new(HashMap::new())));
+        context.push(Variant::Map(Rc::new(RefCell::new(HashMap::new()))));
         1
     }
 
@@ -289,9 +306,9 @@ mod helius_std {
             Variant::Number(n) => n,
             _ => panic!("function range expects a numeric argument"),
         };
-        context.push(Variant::Array(Rc::new(
+        context.push(Variant::Array(Rc::new(RefCell::new(
             (0..n).map(Variant::Number).collect(),
-        )));
+        ))));
         1
     }
 
@@ -494,12 +511,34 @@ impl ExecutionContext {
         let object = self.pop();
 
         let result = match (&object, &index) {
-            (Variant::Map(map), Variant::String(i)) => map.get(i).unwrap_or(&Variant::None).clone(),
-            (Variant::Array(array), Variant::Number(i)) => array.index(*i as usize).clone(),
+            (Variant::Map(map), Variant::String(i)) => {
+                map.borrow().get(i).unwrap_or(&Variant::None).clone()
+            }
+            (Variant::Array(array), Variant::Number(i)) => {
+                array.borrow().index(*i as usize).clone()
+            }
             _ => panic!("attempt to index a {:?} with {:?}", object, index),
         };
 
         self.push(result);
+    }
+
+    fn set_index(&mut self) {
+        let value = self.pop();
+        let index = self.pop();
+        let object = self.pop();
+
+        match (&object, &index) {
+            (Variant::Map(map), Variant::String(i)) => {
+                let mut map = (**map).borrow_mut();
+                map.insert(i.to_owned(), value);
+            }
+            (Variant::Array(array), Variant::Number(i)) => {
+                let mut array = (**array).borrow_mut();
+                array[*i as usize] = value;
+            }
+            _ => panic!("attempt to index a {:?} with {:?}", object, index),
+        };
     }
 }
 
@@ -546,7 +585,7 @@ fn main() {
     context.add_native_function("map", &helius_std::map);
     context.add_native_function("range", &helius_std::range);
 
-    let math_module = HashMap::from_iter(
+    let math_module = RefCell::new(HashMap::from_iter(
         [
             NativeFunction {
                 name: "sin".to_owned(),
@@ -559,7 +598,7 @@ fn main() {
         ]
         .iter()
         .map(|f| (f.name.clone(), Variant::NativeFunction(f.clone()))),
-    );
+    ));
     context.variable_set("math", Variant::Map(Rc::new(math_module)));
 
     let execution_time = Instant::now();

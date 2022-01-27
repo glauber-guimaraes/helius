@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     cmp,
     collections::HashMap,
     fmt,
@@ -20,8 +21,8 @@ pub enum Variant {
     Boolean(bool),
     NativeFunction(NativeFunction),
     Function(u32),
-    Map(Rc<HashMap<String, Variant>>),
-    Array(Rc<Vec<Variant>>),
+    Map(Rc<RefCell<HashMap<String, Variant>>>),
+    Array(Rc<RefCell<Vec<Variant>>>),
     None,
 }
 
@@ -73,7 +74,7 @@ impl fmt::Display for Variant {
             Variant::None => f.write_str("None"),
             Variant::Function(_) => f.write_str("<Function>"),
             Variant::Map(_) => f.write_str("<Map>"),
-            Variant::Array(array) => f.write_fmt(format_args!("<Array[{}]>", array.len())),
+            Variant::Array(array) => f.write_fmt(format_args!("<Array[{}]>", array.borrow().len())),
         }
     }
 }
@@ -133,9 +134,13 @@ impl ops::Add for Variant {
             (Self::Float(lhs), Self::Float(rhs)) => Variant::Float(*lhs + *rhs),
             (Self::Number(lhs), Self::Float(rhs)) => Variant::Float(*lhs as f32 + *rhs),
             (Self::Float(lhs), Self::Number(rhs)) => Variant::Float(*lhs + *rhs as f32),
-            (Self::Array(lhs), Self::Array(rhs)) => {
-                Variant::Array(Rc::new(lhs.iter().chain(rhs.iter()).cloned().collect()))
-            }
+            (Self::Array(lhs), Self::Array(rhs)) => Variant::Array(Rc::new(RefCell::new(
+                lhs.borrow()
+                    .iter()
+                    .chain(rhs.borrow().iter())
+                    .cloned()
+                    .collect(),
+            ))),
             _ => {
                 panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
             }

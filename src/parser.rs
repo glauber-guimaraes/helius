@@ -5,7 +5,7 @@ use crate::{
     variant::Variant,
     ASTNode, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall, NodeConditional,
     NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop, NodeReturn,
-    NodeUnaryOperation, NodeVariant,
+    NodeSetIndex, NodeUnaryOperation, NodeVariant,
 };
 
 pub struct Parser {
@@ -160,6 +160,10 @@ impl Parser {
                 Ok(call) => Some(Ok(Box::new(call))),
                 Err(err) => Some(Err(err)),
             };
+        }
+
+        if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+            return Some(self.parse_prefix_expression(Box::new(NodeVariant(ident.into()))));
         }
 
         unreachable!(
@@ -481,6 +485,63 @@ impl Parser {
             self.parse_get_index(node)
         } else {
             Ok(node)
+        }
+    }
+
+    fn parse_prefix_expression(
+        &mut self,
+        base: Box<dyn ASTNode>,
+    ) -> ParserResult<Box<dyn ASTNode>> {
+        let is_bracket_get = match self.consume().r#type {
+            TokenType::LeftBracket => true,
+            TokenType::Period => false,
+            _ => unreachable!(),
+        };
+
+        let index = if is_bracket_get {
+            let expr = self.parse_expression(Precedence::Assignment as u32)?;
+            self.expect(TokenType::RightBracket, "expected `]` after index")?;
+            expr
+        } else {
+            if self.peek_type() != TokenType::Identifier {
+                return self.create_error_at_token(
+                    self.current.as_ref().unwrap(),
+                    "object index must be a valid identifier",
+                    "here",
+                );
+            }
+
+            let ident = self.consume();
+            Box::new(NodeVariant(Variant::String(ident.lexeme)))
+        };
+
+        if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+            let node = Box::new(NodeGetIndex { base, name: index });
+            self.parse_prefix_expression(node)
+        } else if self.match_and_advance(TokenType::Assignment) {
+            let node = Box::new(NodeSetIndex {
+                base,
+                index,
+                value: self.parse_expression(Precedence::Assignment as u32)?,
+            });
+            Ok(node)
+        } else if [TokenType::String, TokenType::LeftParenthesis].contains(&self.peek_type()) {
+            let mut node = Box::new(
+                self.parse_function_call(Box::new(NodeGetIndex { base, name: index }), Some(0))?,
+            );
+
+            if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+                node.expected_return_count = Some(1);
+                self.parse_prefix_expression(node)
+            } else {
+                Ok(node)
+            }
+        } else {
+            self.create_error_at_token(
+                self.current.as_ref().unwrap(),
+                "expected statement after var found",
+                "this should either end with an assignment or function call",
+            )
         }
     }
 }

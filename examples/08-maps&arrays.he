@@ -9,5 +9,27 @@ array = range(5)
 i = 0
 while i < 5 do
     print(array[i])
+    array[i] = 2 * i
     i = i + 1
 end
+
+print "Doubled range:"
+i = 0
+while i < 5 do
+    print(array[i])
+    i = i + 1
+end
+
+math.pi = 3.1415137
+print(math.pi)
+
+m.inner = map()
+m.inner.func = function() print "Inner function" end
+m.inner.func()
+
+m.self = function() return m end
+
+m["self"]().inner.func()
+
+shadow = m.inner.func()
+print(shadow)

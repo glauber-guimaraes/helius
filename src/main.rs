@@ -543,6 +543,29 @@ impl ExecutionContext {
             _ => panic!("attempt to index a {:?} with {:?}", object, index),
         };
     }
+
+    fn create_array(&mut self, len: usize) {
+        let start = self.stack.len() - len;
+        let array: Vec<Variant> = self.stack.drain(start..).collect();
+
+        self.push(array.into());
+    }
+}
+
+struct NodeArrayConstructor {
+    items: Vec<Box<dyn ASTNode>>,
+}
+
+impl ASTNode for NodeArrayConstructor {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        for item in self.items.iter() {
+            item.execute(context);
+        }
+
+        context.create_array(self.items.len());
+
+        ContinuationFlow::Continue
+    }
 }
 
 struct NodeMapConstructor {

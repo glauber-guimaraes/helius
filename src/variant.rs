@@ -107,6 +107,12 @@ impl From<HashMap<String, Variant>> for Variant {
     }
 }
 
+impl From<Vec<Variant>> for Variant {
+    fn from(v: Vec<Variant>) -> Self {
+        Self::Array(Rc::new(RefCell::new(v)))
+    }
+}
+
 impl cmp::Eq for Variant {}
 
 impl cmp::PartialEq for Variant {

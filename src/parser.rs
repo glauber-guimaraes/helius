@@ -3,8 +3,8 @@ use std::process;
 use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
-    ASTNode, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall, NodeConditional,
-    NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop,
+    ASTNode, NodeArrayConstructor, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall,
+    NodeConditional, NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop,
     NodeMapConstructor, NodeMapItem, NodeReturn, NodeSetIndex, NodeUnaryOperation, NodeVariant,
 };
 
@@ -352,6 +352,7 @@ impl Parser {
             TokenType::None,
             TokenType::LeftParenthesis,
             TokenType::LeftCurlyBracket,
+            TokenType::LeftSquareBracket,
         ]) {
             return self.create_error_at_token(
                 &lhs,
@@ -414,6 +415,21 @@ impl Parser {
                 "expected map constructor after `{` token",
             )?;
             Box::new(NodeMapConstructor { items })
+        } else if lhs.is_type(TokenType::LeftSquareBracket) {
+            let mut items = vec![];
+            while self.peek_type() != TokenType::RightSquareBracket {
+                self.ignore_multiple(TokenType::Newline);
+
+                items.push(self.parse_expression(Precedence::Assignment as u32)?);
+                self.match_and_advance(TokenType::Comma);
+                self.ignore_multiple(TokenType::Newline);
+            }
+
+            self.expect(
+                TokenType::RightSquareBracket,
+                "expected map constructor after `{` token",
+            )?;
+            Box::new(NodeArrayConstructor { items })
         } else {
             Box::new(NodeVariant(lhs.into()))
         };

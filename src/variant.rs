@@ -3,7 +3,7 @@ use std::{
     cmp,
     collections::HashMap,
     fmt,
-    ops::{self, Deref},
+    ops::{self, Deref, DerefMut},
     rc::Rc,
 };
 
@@ -21,7 +21,7 @@ pub enum Variant {
     Boolean(bool),
     NativeFunction(NativeFunction),
     Function(u32),
-    Map(Rc<RefCell<HashMap<String, Variant>>>),
+    Map(Rc<RefCell<MapObject>>),
     Array(Rc<RefCell<Vec<Variant>>>),
     None,
 }
@@ -30,6 +30,39 @@ pub enum Variant {
 pub struct NativeFunction {
     pub name: String,
     pub func: &'static dyn Fn(&mut ExecutionContext) -> usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct MapObject {
+    pub map: HashMap<String, Variant>,
+    pub metatable: Option<Rc<RefCell<MapObject>>>,
+}
+
+impl Deref for MapObject {
+    type Target = HashMap<String, Variant>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.map
+    }
+}
+
+impl DerefMut for MapObject {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.map
+    }
+}
+
+impl MapObject {
+    fn new(map: Option<HashMap<String, Variant>>) -> Self {
+        MapObject {
+            map: map.unwrap_or_default(),
+            metatable: None,
+        }
+    }
+
+    fn get_metatable(&self) -> &Option<Rc<RefCell<MapObject>>> {
+        &self.metatable
+    }
 }
 
 impl std::fmt::Debug for NativeFunction {
@@ -103,7 +136,7 @@ impl From<String> for Variant {
 
 impl From<HashMap<String, Variant>> for Variant {
     fn from(map: HashMap<String, Variant>) -> Self {
-        Self::Map(Rc::new(RefCell::new(map)))
+        Self::Map(Rc::new(RefCell::new(MapObject::new(Some(map)))))
     }
 }
 

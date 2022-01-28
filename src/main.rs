@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::{
-    cell::RefCell,
     collections::HashMap,
     env, fmt, fs,
     iter::{self, FromIterator},
@@ -300,7 +299,7 @@ impl ASTNode for NodeCall {
 }
 
 mod helius_std {
-    use std::{cell::RefCell, collections::HashMap, rc::Rc};
+    use std::{cell::RefCell, rc::Rc};
 
     use crate::{variant::Variant, ExecutionContext};
 
@@ -679,7 +678,7 @@ fn main() {
     context.add_native_function("range", &helius_std::range);
     context.add_native_function("len", &helius_std::len);
 
-    let math_module = RefCell::new(HashMap::from_iter(
+    let math_module = HashMap::from_iter(
         [
             NativeFunction {
                 name: "sin".to_owned(),
@@ -692,8 +691,8 @@ fn main() {
         ]
         .iter()
         .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
-    ));
-    context.variable_set("math", Variant::Map(Rc::new(math_module)));
+    );
+    context.variable_set("math", math_module.into());
 
     let execution_time = Instant::now();
     for stmt in program {

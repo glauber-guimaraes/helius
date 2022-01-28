@@ -101,6 +101,12 @@ impl From<String> for Variant {
     }
 }
 
+impl From<HashMap<String, Variant>> for Variant {
+    fn from(map: HashMap<String, Variant>) -> Self {
+        Self::Map(Rc::new(RefCell::new(map)))
+    }
+}
+
 impl cmp::Eq for Variant {}
 
 impl cmp::PartialEq for Variant {

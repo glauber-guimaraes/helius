@@ -255,6 +255,33 @@ impl ASTNode for NodeExpressionList {
     }
 }
 
+struct NodeSelfCall {
+    object: Box<dyn ASTNode>,
+    func: Box<dyn ASTNode>,
+    args: NodeExpressionList,
+    expected_return_count: Option<usize>,
+}
+
+impl ASTNode for NodeSelfCall {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        self.object.execute(context);
+        self.args.execute(context);
+        self.func.execute(context);
+
+        context.call_native_function(self.args.0.len() + 1, self.expected_return_count);
+
+        ContinuationFlow::Normal
+    }
+}
+
+struct NodeNop {}
+
+impl ASTNode for NodeNop {
+    fn execute(&self, _: &mut ExecutionContext) -> ContinuationFlow {
+        ContinuationFlow::Normal
+    }
+}
+
 struct NodeCall {
     func: Box<dyn ASTNode>,
     args: NodeExpressionList,
@@ -264,10 +291,9 @@ struct NodeCall {
 impl ASTNode for NodeCall {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.args.execute(context);
-        let args = self.args.0.iter().map(|_| Variant::None).collect();
         self.func.execute(context);
 
-        context.call_native_function(args, self.expected_return_count);
+        context.call_native_function(self.args.0.len(), self.expected_return_count);
 
         ContinuationFlow::Normal
     }
@@ -454,12 +480,12 @@ impl ExecutionContext {
         );
     }
 
-    fn call_native_function(&mut self, args: Vec<Variant>, expect_return_count: Option<usize>) {
+    fn call_native_function(&mut self, args: usize, expect_return_count: Option<usize>) {
         let function = self.pop();
         self.call_info.push(FunctionInfo {
-            stack_base: self.stack.len() - args.len(),
+            stack_base: self.stack.len() - args,
             local_variables: vec![],
-            arg_count: args.len(),
+            arg_count: args,
         });
 
         let return_count;
@@ -470,6 +496,7 @@ impl ExecutionContext {
             }
             Variant::Function(block) => {
                 let f = self.functions[block as usize].clone();
+
                 self.call_info.last_mut().unwrap().local_variables = f.arg_names.clone();
 
                 f.execute(self);
@@ -484,7 +511,8 @@ impl ExecutionContext {
             }
         };
         let stack_base = self.call_info.last().unwrap().stack_base;
-        let local_count = args.len();
+        let local_count = args;
+
         self.stack.drain(stack_base..stack_base + local_count);
 
         if let Some(expected_return_count) = expect_return_count {
@@ -564,7 +592,7 @@ impl ASTNode for NodeArrayConstructor {
 
         context.create_array(self.items.len());
 
-        ContinuationFlow::Continue
+        ContinuationFlow::Normal
     }
 }
 
@@ -581,7 +609,7 @@ impl ASTNode for NodeMapConstructor {
         }
 
         context.push(map);
-        ContinuationFlow::Continue
+        ContinuationFlow::Normal
     }
 }
 
@@ -596,7 +624,7 @@ impl ASTNode for NodeMapItem {
         self.expression.execute(context);
 
         context.set_index();
-        ContinuationFlow::Continue
+        ContinuationFlow::Normal
     }
 }
 

@@ -32,6 +32,7 @@ pub enum TokenType {
     Continue,
     Return,
     Comma,
+    Colon,
     Period,
     LeftSquareBracket,
     RightSquareBracket,
@@ -192,6 +193,7 @@ impl Tokenizer {
                 ']' => Ok(self.create_token(TokenType::RightSquareBracket, "]")),
                 '{' => Ok(self.create_token(TokenType::LeftCurlyBracket, "{")),
                 '}' => Ok(self.create_token(TokenType::RightCurlyBracket, "}")),
+                ':' => Ok(self.create_token(TokenType::Colon, ":")),
                 '#' => {
                     self.consume_comment();
                     return self.next();

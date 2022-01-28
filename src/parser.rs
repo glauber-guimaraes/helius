@@ -5,7 +5,8 @@ use crate::{
     variant::Variant,
     ASTNode, NodeArrayConstructor, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall,
     NodeConditional, NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop,
-    NodeMapConstructor, NodeMapItem, NodeReturn, NodeSetIndex, NodeUnaryOperation, NodeVariant,
+    NodeMapConstructor, NodeMapItem, NodeNop, NodeReturn, NodeSelfCall, NodeSetIndex,
+    NodeUnaryOperation, NodeVariant,
 };
 
 pub struct Parser {
@@ -152,6 +153,24 @@ impl Parser {
         let ident = self.consume();
         if self.match_and_advance(TokenType::Assignment) {
             return Some(self.parse_assignment(ident));
+        }
+
+        if self.peek_type() == TokenType::Colon {
+            self.advance(); // `:`
+            let method = self.consume();
+            if !method.is_type(TokenType::Identifier) {
+                return Some(self.create_error_at_token(
+                    &method,
+                    "expected method name for object call",
+                    "expected here",
+                ));
+            }
+            let object = Box::new(NodeVariant(ident.to_owned().into()));
+            let method = Box::new(NodeGetIndex {
+                base: Box::new(NodeVariant(ident.into())),
+                name: Box::new(NodeVariant(method.lexeme.into())),
+            });
+            return Some(self.parse_object_call(object, method, Some(0)));
         }
 
         let current_type = self.peek_type();
@@ -381,6 +400,22 @@ impl Parser {
             } else {
                 node
             }
+        } else if lhs.is_type(TokenType::Identifier) && self.peek_type() == TokenType::Colon {
+            self.advance(); // `:`
+            let method = self.consume();
+            if !method.is_type(TokenType::Identifier) {
+                return self.create_error_at_token(
+                    &method,
+                    "expected method name for object call",
+                    "expected here",
+                );
+            }
+            let object = Box::new(NodeVariant(lhs.to_owned().into()));
+            let method = Box::new(NodeGetIndex {
+                base: Box::new(NodeVariant(lhs.into())),
+                name: Box::new(NodeVariant(method.lexeme.into())),
+            });
+            self.parse_object_call(object, method, Some(1))?
         } else if lhs.is_type(TokenType::LeftCurlyBracket) {
             let mut items = vec![];
             while self.peek_type() != TokenType::RightCurlyBracket {
@@ -480,6 +515,34 @@ impl Parser {
         }
 
         Ok(expr_node)
+    }
+
+    fn parse_object_call(
+        &mut self,
+        object: Box<dyn ASTNode>,
+        func: Box<dyn ASTNode>,
+        expected_return_count: Option<usize>,
+    ) -> ParserResult<Box<dyn ASTNode>> {
+        let node =
+            Box::new(self.parse_function_call(Box::new(NodeContinue), expected_return_count)?);
+
+        let mut self_call = NodeSelfCall {
+            object,
+            func,
+            args: node.args,
+            expected_return_count,
+        };
+
+        if self.peek_type() == TokenType::Colon {
+            self_call.expected_return_count = Some(1);
+            self.parse_object_call(
+                Box::new(self_call),
+                Box::new(NodeNop {}),
+                expected_return_count,
+            )
+        } else {
+            Ok(Box::new(self_call))
+        }
     }
 
     fn consume(&mut self) -> Token {

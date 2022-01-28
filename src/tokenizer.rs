@@ -307,7 +307,7 @@ impl Tokenizer {
     }
 
     fn consume_comment(&mut self) {
-        while self.source[self.index] != '\n' {
+        while !self.is_eof() && self.source[self.index] != '\n' {
             self.advance();
         }
     }

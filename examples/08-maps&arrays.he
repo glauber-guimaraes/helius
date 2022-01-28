@@ -35,3 +35,19 @@ shadow = m.inner.func()
 print(shadow)
 
 assert("H" == "Hello world"[0])
+
+print(range(3))
+
+map_starter = {
+    a = 3, 
+    "with spaces" = 5,
+    __call = function()
+        print "__call"
+    end,
+}
+print(map_starter)
+print(map_starter.a)
+print(map_starter["with spaces"])
+map_starter.__call()
+
+print({a = 1}.a)

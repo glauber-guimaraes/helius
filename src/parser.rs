@@ -4,8 +4,8 @@ use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
     ASTNode, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall, NodeConditional,
-    NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop, NodeReturn,
-    NodeSetIndex, NodeUnaryOperation, NodeVariant,
+    NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop,
+    NodeMapConstructor, NodeMapItem, NodeReturn, NodeSetIndex, NodeUnaryOperation, NodeVariant,
 };
 
 pub struct Parser {
@@ -162,7 +162,7 @@ impl Parser {
             };
         }
 
-        if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+        if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type()) {
             return Some(self.parse_prefix_expression(Box::new(NodeVariant(ident.into()))));
         }
 
@@ -258,6 +258,10 @@ impl Parser {
         }
     }
 
+    fn create_error_at_current<T>(&self, msg: &str, short_msg: &str) -> ParserResult<T> {
+        self.create_error_at_token(self.current.as_ref().unwrap(), msg, short_msg)
+    }
+
     fn create_error_at_token<T>(
         &self,
         token: &Token,
@@ -319,6 +323,10 @@ impl Parser {
         Ok(Box::new(NodeVariant(Variant::Function(function_id))))
     }
 
+    fn ignore_multiple(&mut self, token_type: TokenType) {
+        while self.match_and_advance(token_type) {}
+    }
+
     fn parse_expression(&mut self, precedence: u32) -> ParserResult<Box<dyn ASTNode>> {
         // prefix expression
         let lhs = self.consume();
@@ -343,6 +351,7 @@ impl Parser {
             TokenType::Boolean,
             TokenType::None,
             TokenType::LeftParenthesis,
+            TokenType::LeftCurlyBracket,
         ]) {
             return self.create_error_at_token(
                 &lhs,
@@ -361,7 +370,7 @@ impl Parser {
         {
             Box::new(self.parse_function_call(Box::new(NodeVariant(lhs.into())), Some(1))?)
         } else if lhs.is_type(TokenType::Identifier)
-            && [TokenType::Period, TokenType::LeftBracket].contains(&self.peek_type())
+            && [TokenType::Period, TokenType::LeftSquareBracket].contains(&self.peek_type())
         {
             let node = self.parse_get_index(Box::new(NodeVariant(lhs.into())))?;
             if self.peek_type() == TokenType::LeftParenthesis
@@ -371,11 +380,46 @@ impl Parser {
             } else {
                 node
             }
+        } else if lhs.is_type(TokenType::LeftCurlyBracket) {
+            let mut items = vec![];
+            while self.peek_type() != TokenType::RightCurlyBracket {
+                self.ignore_multiple(TokenType::Newline);
+
+                let identifier = self.consume();
+                if !identifier.is_any_type(&[TokenType::Identifier, TokenType::String]) {
+                    return self.create_error_at_current(
+                        "expected identifier or string literal on map item definition",
+                        "here",
+                    );
+                }
+                let identifier = identifier.lexeme;
+                self.expect(
+                    TokenType::Assignment,
+                    "expected assignment after identifier on map item definition",
+                )?;
+
+                let expression = self.parse_expression(Precedence::Assignment as u32)?;
+
+                items.push(NodeMapItem {
+                    identifier,
+                    expression,
+                });
+
+                self.match_and_advance(TokenType::Comma);
+                self.ignore_multiple(TokenType::Newline);
+            }
+
+            self.expect(
+                TokenType::RightCurlyBracket,
+                "expected map constructor after `{` token",
+            )?;
+            Box::new(NodeMapConstructor { items })
         } else {
             Box::new(NodeVariant(lhs.into()))
         };
 
-        expr_node = if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+        expr_node = if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type())
+        {
             self.parse_prefix_expression(expr_node)?
         } else {
             expr_node
@@ -463,14 +507,14 @@ impl Parser {
 
     fn parse_get_index(&mut self, base: Box<dyn ASTNode>) -> ParserResult<Box<dyn ASTNode>> {
         let is_bracket_get = match self.consume().r#type {
-            TokenType::LeftBracket => true,
+            TokenType::LeftSquareBracket => true,
             TokenType::Period => false,
             _ => unreachable!(),
         };
 
         let name = if is_bracket_get {
             let expr = self.parse_expression(Precedence::Assignment as u32)?;
-            self.expect(TokenType::RightBracket, "expected `]` after index")?;
+            self.expect(TokenType::RightSquareBracket, "expected `]` after index")?;
             expr
         } else {
             if self.peek_type() != TokenType::Identifier {
@@ -487,7 +531,7 @@ impl Parser {
 
         let node = Box::new(NodeGetIndex { base, name });
 
-        if [TokenType::Period, TokenType::LeftBracket].contains(&self.peek_type()) {
+        if [TokenType::Period, TokenType::LeftSquareBracket].contains(&self.peek_type()) {
             self.parse_get_index(node)
         } else {
             Ok(node)
@@ -499,14 +543,14 @@ impl Parser {
         base: Box<dyn ASTNode>,
     ) -> ParserResult<Box<dyn ASTNode>> {
         let is_bracket_get = match self.consume().r#type {
-            TokenType::LeftBracket => true,
+            TokenType::LeftSquareBracket => true,
             TokenType::Period => false,
             _ => unreachable!(),
         };
 
         let index = if is_bracket_get {
             let expr = self.parse_expression(Precedence::Assignment as u32)?;
-            self.expect(TokenType::RightBracket, "expected `]` after index")?;
+            self.expect(TokenType::RightSquareBracket, "expected `]` after index")?;
             expr
         } else {
             if self.peek_type() != TokenType::Identifier {
@@ -521,7 +565,7 @@ impl Parser {
             Box::new(NodeVariant(Variant::String(ident.lexeme)))
         };
 
-        if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+        if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type()) {
             let node = Box::new(NodeGetIndex { base, name: index });
             self.parse_prefix_expression(node)
         } else if self.match_and_advance(TokenType::Assignment) {
@@ -536,7 +580,7 @@ impl Parser {
                 self.parse_function_call(Box::new(NodeGetIndex { base, name: index }), Some(0))?,
             );
 
-            if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+            if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type()) {
                 node.expected_return_count = Some(1);
                 self.parse_prefix_expression(node)
             } else {

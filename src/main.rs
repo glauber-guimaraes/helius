@@ -545,6 +545,38 @@ impl ExecutionContext {
     }
 }
 
+struct NodeMapConstructor {
+    items: Vec<NodeMapItem>,
+}
+
+impl ASTNode for NodeMapConstructor {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        let map: Variant = HashMap::new().into();
+        for item in self.items.iter() {
+            context.push(map.clone());
+            item.execute(context);
+        }
+
+        context.push(map);
+        ContinuationFlow::Continue
+    }
+}
+
+struct NodeMapItem {
+    identifier: String,
+    expression: Box<dyn ASTNode>,
+}
+
+impl ASTNode for NodeMapItem {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        context.push(self.identifier.to_owned().into());
+        self.expression.execute(context);
+
+        context.set_index();
+        ContinuationFlow::Continue
+    }
+}
+
 fn show_usage(program_name: &str, error_msg: &str) {
     println!("usage: {} file_name", program_name);
     println!("error: {}", error_msg)

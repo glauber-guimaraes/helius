@@ -517,6 +517,9 @@ impl ExecutionContext {
             (Variant::Array(array), Variant::Number(i)) => {
                 array.borrow().index(*i as usize).clone()
             }
+            (Variant::String(s), Variant::Number(i)) => {
+                s.chars().nth(*i as usize).unwrap().to_string().into()
+            }
             _ => panic!("attempt to index a {:?} with {:?}", object, index),
         };
 

@@ -93,6 +93,12 @@ impl From<Token> for Variant {
     }
 }
 
+impl From<String> for Variant {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
 impl cmp::PartialEq for Variant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

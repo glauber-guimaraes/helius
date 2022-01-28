@@ -99,6 +99,8 @@ impl From<String> for Variant {
     }
 }
 
+impl cmp::Eq for Variant {}
+
 impl cmp::PartialEq for Variant {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
@@ -107,8 +109,8 @@ impl cmp::PartialEq for Variant {
             (Self::Float(n0), Self::Float(n1)) => n0 == n1,
             (Self::Number(n0), Self::Float(n1)) => *n0 as f32 == *n1,
             (Self::Float(n0), Self::Number(n1)) => *n0 == *n1 as f32,
-            (Self::Map(m1), Self::Map(m2)) => m1 == m2,
-            (Self::Array(a1), Self::Array(a2)) => a1 == a2,
+            (Self::Map(m1), Self::Map(m2)) => Rc::ptr_eq(m1, m2),
+            (Self::Array(a1), Self::Array(a2)) => Rc::ptr_eq(a1, a2),
             (Self::None, Self::None) => true,
             (_, Self::None) => false,
             (Self::None, _) => false,

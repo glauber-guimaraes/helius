@@ -600,7 +600,7 @@ fn main() {
             },
         ]
         .iter()
-        .map(|f| (f.name.clone(), Variant::NativeFunction(f.clone()))),
+        .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
     ));
     context.variable_set("math", Variant::Map(Rc::new(math_module)));
 

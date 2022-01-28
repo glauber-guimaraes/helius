@@ -34,5 +34,4 @@ m["self"]().inner.func()
 shadow = m.inner.func()
 print(shadow)
 
-t = "Hello world"
-assert("H" == t[0])
+assert("H" == "Hello world"[0])

@@ -375,6 +375,12 @@ impl Parser {
             Box::new(NodeVariant(lhs.into()))
         };
 
+        expr_node = if [TokenType::LeftBracket, TokenType::Period].contains(&self.peek_type()) {
+            self.parse_prefix_expression(expr_node)?
+        } else {
+            expr_node
+        };
+
         // infix expression
         while precedence < self.current.as_ref().unwrap().get_precedence() {
             let op = self.consume();
@@ -537,11 +543,7 @@ impl Parser {
                 Ok(node)
             }
         } else {
-            self.create_error_at_token(
-                self.current.as_ref().unwrap(),
-                "expected statement after var found",
-                "this should either end with an assignment or function call",
-            )
+            Ok(Box::new(NodeGetIndex { base, name: index }))
         }
     }
 }

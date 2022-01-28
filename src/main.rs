@@ -335,11 +335,6 @@ mod helius_std {
         0
     }
 
-    pub fn map(context: &mut ExecutionContext) -> usize {
-        context.push(Variant::Map(Rc::new(RefCell::new(HashMap::new()))));
-        1
-    }
-
     pub fn range(context: &mut ExecutionContext) -> usize {
         let n = match context.read_local(0) {
             Variant::Number(n) => n,
@@ -681,7 +676,6 @@ fn main() {
     context.add_native_function("print", &helius_std::print);
     context.add_native_function("assert", &helius_std::assert);
     context.add_native_function("pow", &helius_std::math::pow);
-    context.add_native_function("map", &helius_std::map);
     context.add_native_function("range", &helius_std::range);
     context.add_native_function("len", &helius_std::len);
 

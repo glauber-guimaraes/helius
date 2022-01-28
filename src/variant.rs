@@ -75,8 +75,8 @@ impl fmt::Display for Variant {
             }
             Variant::None => f.write_str("None"),
             Variant::Function(_) => f.write_str("<Function>"),
-            Variant::Map(map) => f.write_fmt(format_args!("<Map {:p}>", &map.borrow())),
-            Variant::Array(array) => f.write_fmt(format_args!("<Array {:p}>", &array.borrow())),
+            Variant::Map(map) => f.write_fmt(format_args!("<Map {:p}>", map.as_ptr())),
+            Variant::Array(array) => f.write_fmt(format_args!("<Array {:p}>", array.as_ptr())),
         }
     }
 }

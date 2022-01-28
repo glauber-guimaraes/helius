@@ -1,19 +1,42 @@
-t = "Hello world"
-iter = map()
-iter.target = t
-iter.index = 0
-iter.current = none
+t = "Hello"
 
-print(iter.target[iter.index])
+iter = function(source)
+    return {
+        source = source,
+        index = 0,
+        current = none,
+        next = function (self)
+            if self.index == len(self.source) then
+                return false
+            end
 
-iter.next = function() 
-    iter.current = iter.target[iter.index]
-    iter.index = iter.index + 1
-    return iter.index <= 10
+            self.current = self.source[self.index]
+            self.index = self.index + 1
+            return true
+        end,
+    }
 end
 
-while iter.next() do
-    print(iter.current)
+it = iter(t)
+while it:next() do
+    print(it.current)
 end
 
-print(t[11])
+it = iter([1,2,3,4,5])
+while it:next() do
+    print(it.current)
+end
+
+# When locals are implemented this should be available:
+# The function iter returns a map like the one above
+# for i in iter(t) do
+#     print(i)
+# end
+
+# and the compiler should generate:
+# local <Generated#0>it = iter(t) # This should use a name that is impossible to collide with user generated ones
+# while <Generated#0>it.next() do
+#     local i = <Generated#0>it.current
+#     # Hereafter is the user defined block
+#     print(i)
+# end

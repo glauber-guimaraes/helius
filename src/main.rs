@@ -312,6 +312,19 @@ mod helius_std {
         0
     }
 
+    pub fn len(context: &mut ExecutionContext) -> usize {
+        let arg = context.read_local(0);
+        let len = match &arg {
+            Variant::String(s) => s.chars().count(),
+            Variant::Map(map) => map.borrow().len(),
+            Variant::Array(array) => array.borrow().len(),
+            _ => panic!("Trying to compute len of {:?}", arg),
+        } as i32;
+
+        context.push(Variant::Number(len));
+        1
+    }
+
     pub fn assert(context: &mut ExecutionContext) -> usize {
         let args = context.locals();
         if args.len() != 1 {
@@ -670,6 +683,7 @@ fn main() {
     context.add_native_function("pow", &helius_std::math::pow);
     context.add_native_function("map", &helius_std::map);
     context.add_native_function("range", &helius_std::range);
+    context.add_native_function("len", &helius_std::len);
 
     let math_module = RefCell::new(HashMap::from_iter(
         [

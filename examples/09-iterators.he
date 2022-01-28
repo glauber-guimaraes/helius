@@ -1,0 +1,19 @@
+t = "Hello world"
+iter = map()
+iter.target = t
+iter.index = 0
+iter.current = none
+
+print(iter.target[iter.index])
+
+iter.next = function() 
+    iter.current = iter.target[iter.index]
+    iter.index = iter.index + 1
+    return iter.index <= 10
+end
+
+while iter.next() do
+    print(iter.current)
+end
+
+print(t[11])

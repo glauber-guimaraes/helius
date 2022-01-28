@@ -481,7 +481,7 @@ impl Parser {
 
         let node = Box::new(NodeGetIndex { base, name });
 
-        if self.peek_type() == TokenType::Period {
+        if [TokenType::Period, TokenType::LeftBracket].contains(&self.peek_type()) {
             self.parse_get_index(node)
         } else {
             Ok(node)

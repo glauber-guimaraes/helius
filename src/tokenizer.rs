@@ -33,8 +33,10 @@ pub enum TokenType {
     Return,
     Comma,
     Period,
-    LeftBracket,
-    RightBracket,
+    LeftSquareBracket,
+    RightSquareBracket,
+    LeftCurlyBracket,
+    RightCurlyBracket,
     Newline,
     Eof,
 }
@@ -125,7 +127,7 @@ pub struct Tokenizer {
 #[derive(Debug)]
 pub enum TokenError {
     Generic(usize, usize),
-    UndefinedCharacter(usize, usize),
+    UndefinedCharacter(usize, usize, char),
 }
 
 impl Tokenizer {
@@ -156,7 +158,7 @@ impl Tokenizer {
             let result = self.create_token(TokenType::Newline, "\n");
             self.advance();
             Ok(result)
-        } else if chr.is_ascii_alphabetic() {
+        } else if chr.is_ascii_alphabetic() || chr == '_' {
             let mut token = self.parse_identifier();
             token.r#type = match &*token.lexeme {
                 "true" | "false" => TokenType::Boolean,
@@ -186,13 +188,15 @@ impl Tokenizer {
                 '(' => Ok(self.create_token(TokenType::LeftParenthesis, "(")),
                 ')' => Ok(self.create_token(TokenType::RightParenthesis, ")")),
                 '"' => Ok(self.parse_string()),
-                '[' => Ok(self.create_token(TokenType::LeftBracket, "[")),
-                ']' => Ok(self.create_token(TokenType::RightBracket, "]")),
+                '[' => Ok(self.create_token(TokenType::LeftSquareBracket, "[")),
+                ']' => Ok(self.create_token(TokenType::RightSquareBracket, "]")),
+                '{' => Ok(self.create_token(TokenType::LeftCurlyBracket, "{")),
+                '}' => Ok(self.create_token(TokenType::RightCurlyBracket, "}")),
                 '#' => {
                     self.consume_comment();
                     return self.next();
                 }
-                _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
+                _ => Err(TokenError::UndefinedCharacter(self.line, self.column, chr)),
             };
             self.advance();
             result
@@ -211,7 +215,11 @@ impl Tokenizer {
                 '<' => Ok(self.create_token(TokenType::LowerOrEqualThan, "<=")),
                 '=' => Ok(self.create_token(TokenType::Equality, "==")),
                 '!' => Ok(self.create_token(TokenType::Inequality, "!=")),
-                _ => Err(TokenError::UndefinedCharacter(self.line, self.column)),
+                _ => Err(TokenError::UndefinedCharacter(
+                    self.line,
+                    self.column,
+                    start_char,
+                )),
             };
         }
 
@@ -219,7 +227,11 @@ impl Tokenizer {
             '>' => Ok(self.create_token(TokenType::GreaterThan, ">")),
             '<' => Ok(self.create_token(TokenType::LowerThan, "<")),
             '=' => Ok(self.create_token(TokenType::Assignment, "=")),
-            '!' => Err(TokenError::UndefinedCharacter(self.line, self.column)),
+            '!' => Err(TokenError::UndefinedCharacter(
+                self.line,
+                self.column,
+                start_char,
+            )),
             _ => unreachable!(),
         }
     }

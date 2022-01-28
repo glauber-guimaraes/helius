@@ -70,11 +70,13 @@ impl fmt::Display for Variant {
             Variant::Number(n) => f.write_fmt(format_args!("{}", n)),
             Variant::Float(n) => f.write_fmt(format_args!("{}", n)),
             Variant::Boolean(b) => f.write_str(if *b { "True" } else { "False" }),
-            Variant::NativeFunction(func) => f.write_fmt(format_args!("{:?}", func)),
+            Variant::NativeFunction(func) => {
+                f.write_fmt(format_args!("<Function: {} {:p}>", func.name, &func.func))
+            }
             Variant::None => f.write_str("None"),
             Variant::Function(_) => f.write_str("<Function>"),
-            Variant::Map(_) => f.write_str("<Map>"),
-            Variant::Array(array) => f.write_fmt(format_args!("<Array[{}]>", array.borrow().len())),
+            Variant::Map(map) => f.write_fmt(format_args!("<Map {:p}>", &map.borrow())),
+            Variant::Array(array) => f.write_fmt(format_args!("<Array {:p}>", &array.borrow())),
         }
     }
 }

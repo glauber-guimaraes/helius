@@ -163,20 +163,40 @@ impl Parser {
                     "expected here",
                 ));
             }
-            let object = Box::new(NodeVariant(ident.to_owned().into()));
-            let method = Box::new(NodeGetIndex {
-                base: Box::new(NodeVariant(ident.into())),
-                name: Box::new(NodeVariant(method.lexeme.into())),
-            });
+            let object = Box::new(NodeVariant(ident.into()));
+            let method = Box::new(NodeVariant(method.lexeme.into()));
             return Some(self.parse_object_call(object, method, Some(0)));
         }
 
         let current_type = self.peek_type();
         if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
-            return match self.parse_function_call(Box::new(NodeVariant(ident.into())), Some(0)) {
-                Ok(call) => Some(Ok(Box::new(call))),
-                Err(err) => Some(Err(err)),
-            };
+            let mut call =
+                match self.parse_function_call(Box::new(NodeVariant(ident.into())), Some(0)) {
+                    Ok(call) => call,
+                    Err(err) => return Some(Err(err)),
+                };
+
+            if self.match_and_advance(TokenType::Colon) {
+                call.expected_return_count = Some(1);
+
+                let func = self.consume();
+                let func = match func.r#type {
+                    TokenType::Identifier => NodeVariant(func.lexeme.into()),
+                    _ => {
+                        return Some(self.create_error_at_token(
+                            &func,
+                            "expected identifier after `:` for object call",
+                            "expected here",
+                        ));
+                    }
+                };
+                return match self.parse_object_call(Box::new(call), Box::new(func), Some(0)) {
+                    Ok(call) => Some(Ok(call)),
+                    Err(err) => Some(Err(err)),
+                };
+            } else {
+                return Some(Ok(Box::new(call)));
+            }
         }
 
         if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type()) {
@@ -408,11 +428,8 @@ impl Parser {
                     "expected here",
                 );
             }
-            let object = Box::new(NodeVariant(lhs.to_owned().into()));
-            let method = Box::new(NodeGetIndex {
-                base: Box::new(NodeVariant(lhs.into())),
-                name: Box::new(NodeVariant(method.lexeme.into())),
-            });
+            let object = Box::new(NodeVariant(lhs.into()));
+            let method = Box::new(NodeVariant(method.lexeme.into()));
             self.parse_object_call(object, method, Some(1))?
         } else if lhs.is_type(TokenType::LeftCurlyBracket) {
             let mut items = vec![];
@@ -666,5 +683,19 @@ impl Parser {
         } else {
             Ok(Box::new(NodeGetIndex { base, name: index }))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{parser::Parser, tokenizer::Tokenizer};
+
+    #[test]
+    fn can_make_object_call_on_function_return_statement() {
+        let program = "func():call()";
+        let tokenizer = Tokenizer::new(program.to_string());
+        let mut parser = Parser::new(tokenizer);
+
+        parser.parse();
     }
 }

@@ -14,6 +14,5 @@ print(obj.a)
 # If the object's metatable contains a function called __call, then
 obj()
 
-# is the same as (following line gives an error, will be fixed later)
-# get_metatable(obj):__call()
-
+# is the same as
+get_metatable(obj):__call()

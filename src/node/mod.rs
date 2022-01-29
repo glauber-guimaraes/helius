@@ -250,7 +250,7 @@ impl ASTNode for NodeSelfCall {
         self.args.execute(context);
         self.func.execute(context);
 
-        context.call_native_function(self.args.0.len() + 1, self.expected_return_count);
+        context.call_self_function(self.args.0.len() + 1, self.expected_return_count);
 
         ContinuationFlow::Normal
     }

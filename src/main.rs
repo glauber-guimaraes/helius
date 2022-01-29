@@ -93,6 +93,25 @@ impl ExecutionContext {
         );
     }
 
+    fn print_stack(&self) {
+        println!("> Stack:");
+        for (i, var) in self.stack.iter().enumerate() {
+            println!("[{}] {:?}", i, var);
+        }
+        println!();
+    }
+
+    fn call_self_function(&mut self, args: usize, expect_return_count: Option<usize>) {
+        let index = self.pop();
+        let object = self.stack[self.stack.len() - args].clone();
+
+        self.push(object);
+        self.push(index);
+        self.get_index();
+
+        self.call_native_function(args, expect_return_count);
+    }
+
     fn call_native_function(&mut self, args: usize, expect_return_count: Option<usize>) {
         let function = self.pop();
         self.call_info.push(FunctionInfo {

@@ -1,4 +1,4 @@
-m = map()
+m = {}
 print(m.value)
 print(math.sin(0))
 print(math.cos(0))
@@ -23,7 +23,7 @@ end
 math.pi = 3.1415137
 print(math.pi)
 
-m.inner = map()
+m.inner = {}
 m.inner.func = function() print "Inner function" end
 m.inner.func()
 

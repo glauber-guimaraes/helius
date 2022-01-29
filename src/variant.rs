@@ -7,10 +7,8 @@ use std::{
     rc::Rc,
 };
 
-use crate::{
-    tokenizer::{Token, TokenType},
-    ExecutionContext,
-};
+use crate::tokenizer::{Token, TokenType};
+use crate::ExecutionContext;
 
 #[derive(Debug, Clone)]
 pub enum Variant {

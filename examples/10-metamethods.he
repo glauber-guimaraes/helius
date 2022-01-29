@@ -1,0 +1,18 @@
+# Given an object
+obj = {}
+
+set_metatable(obj, {
+    a = 2,
+    __call = function() 
+        print "Hello metamethods!"
+    end
+})
+
+print(obj.a)
+
+# If the object's metatable contains a function called __call, then
+obj()
+
+# is the same as (following line gives an error, will be fixed later)
+# get_metatable(obj):__call()
+

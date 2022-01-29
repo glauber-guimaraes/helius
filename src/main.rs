@@ -302,10 +302,7 @@ impl ASTNode for NodeCall {
 mod helius_std {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::{
-        variant::{MapObject, Variant},
-        ExecutionContext,
-    };
+    use crate::{variant::Variant, ExecutionContext};
 
     pub fn print(context: &mut ExecutionContext) -> usize {
         for arg in context.locals() {
@@ -543,6 +540,18 @@ impl ExecutionContext {
                     return_count = n as usize;
                 } else {
                     panic!("Return count is not a number");
+                }
+            }
+            Variant::Map(map) => {
+                if let Some(metatable) = map.borrow().get_metatable() {
+                    if let Some(function) = metatable.borrow().get("__call") {
+                        self.push(function.to_owned());
+                        return self.call_native_function(args, expect_return_count);
+                    } else {
+                        panic!("trying to call object but it's metatable doesn't define a __call method");
+                    }
+                } else {
+                    panic!("trying to call object but it's metatable is empty")
                 }
             }
             _ => {

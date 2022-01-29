@@ -3,11 +3,9 @@ use std::process;
 use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
-    ASTNode, NodeArrayConstructor, NodeAssignment, NodeBinaryOperation, NodeBreak, NodeCall,
-    NodeConditional, NodeContinue, NodeExpressionList, NodeFunctionBlock, NodeGetIndex, NodeLoop,
-    NodeMapConstructor, NodeMapItem, NodeNop, NodeReturn, NodeSelfCall, NodeSetIndex,
-    NodeUnaryOperation, NodeVariant,
 };
+
+use crate::node::*;
 
 pub struct Parser {
     tokenizer: Tokenizer,

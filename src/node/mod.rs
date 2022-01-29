@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::HashMap,
+    fmt::{self, Display},
+};
 
 use crate::{variant::Variant, ExecutionContext};
 
@@ -199,6 +202,37 @@ impl ASTNode for NodeGetIndex {
         context.get_index();
 
         ContinuationFlow::Normal
+    }
+}
+
+type RuntimeResult = Result<(), RuntimeError>;
+
+#[derive(Debug)]
+pub struct RuntimeError;
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("RuntimeError")
+    }
+}
+
+impl std::error::Error for RuntimeError {}
+
+pub struct Program {
+    instructions: Vec<Box<dyn ASTNode>>,
+}
+
+impl Program {
+    pub fn new(instructions: Vec<Box<dyn ASTNode>>) -> Self {
+        Self { instructions }
+    }
+
+    pub fn run(&self, context: &mut ExecutionContext) -> RuntimeResult {
+        for instruction in &self.instructions {
+            instruction.execute(context);
+        }
+
+        Ok(())
     }
 }
 

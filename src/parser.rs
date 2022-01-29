@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
@@ -20,6 +22,14 @@ pub struct ParserError {
     column: usize,
 }
 
+impl Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{:?}", self))
+    }
+}
+
+impl std::error::Error for ParserError {}
+
 pub type ParserResult<T = ()> = Result<T, ParserError>;
 
 impl Parser {
@@ -32,7 +42,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {
+    pub fn parse(&mut self) -> ParserResult<Program> {
         self.advance();
         let block = self.parse_block();
         assert_eq!(
@@ -40,7 +50,7 @@ impl Parser {
             TokenType::Eof,
             "parser should stop at eof"
         );
-        block
+        block.map(Program::new)
     }
 
     fn parse_block(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {

@@ -3,7 +3,9 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
-    env, fs,
+    env,
+    error::Error,
+    fs,
     iter::{self, FromIterator},
     ops::Index,
     process,
@@ -15,7 +17,7 @@ mod tokenizer;
 use tokenizer::Tokenizer;
 
 mod parser;
-use parser::{Parser, ParserResult};
+use parser::Parser;
 
 mod variant;
 use variant::{MapObject, NativeFunction, Variant};
@@ -244,7 +246,7 @@ fn show_usage(program_name: &str, error_msg: &str) {
     println!("error: {}", error_msg)
 }
 
-fn main() -> ParserResult<()> {
+fn main() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     let program_name = &args[0];
     if args.len() != 2 {
@@ -301,9 +303,8 @@ fn main() -> ParserResult<()> {
     context.variable_set("math", math_module.into());
 
     let execution_time = Instant::now();
-    for stmt in program {
-        stmt.execute(&mut context);
-    }
+    program.run(&mut context)?;
+
     if !context.stack.is_empty() {
         println!("Warning: Stack should be empty when program finishes executing, but contains:");
         for (i, v) in context.stack.iter().enumerate() {

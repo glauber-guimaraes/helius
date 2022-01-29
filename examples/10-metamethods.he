@@ -3,8 +3,9 @@ obj = {}
 
 set_metatable(obj, {
     a = 2,
-    __call = function() 
+    __call = function(self) 
         print "Hello metamethods!"
+        print(self.a)
     end
 })
 

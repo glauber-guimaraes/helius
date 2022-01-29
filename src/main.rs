@@ -122,8 +122,11 @@ impl ExecutionContext {
             Variant::Map(map) => {
                 if let Some(metatable) = map.borrow().get_metatable() {
                     if let Some(function) = metatable.borrow().get("__call") {
+                        let args_start_index = self.call_info.last().unwrap().stack_base;
+                        self.stack
+                            .insert(args_start_index, Variant::Map(map.clone()));
                         self.push(function.to_owned());
-                        return self.call_native_function(args, expect_return_count);
+                        return self.call_native_function(args + 1, expect_return_count);
                     } else {
                         panic!("trying to call object but it's metatable doesn't define a __call method");
                     }

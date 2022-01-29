@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
     env, fmt, fs,
     iter::{self, FromIterator},
@@ -17,7 +18,7 @@ mod parser;
 use parser::Parser;
 
 mod variant;
-use variant::{NativeFunction, Variant};
+use variant::{MapObject, NativeFunction, Variant};
 
 #[derive(PartialEq, Debug)]
 pub enum ContinuationFlow {
@@ -301,7 +302,10 @@ impl ASTNode for NodeCall {
 mod helius_std {
     use std::{cell::RefCell, rc::Rc};
 
-    use crate::{variant::Variant, ExecutionContext};
+    use crate::{
+        variant::{MapObject, Variant},
+        ExecutionContext,
+    };
 
     pub fn print(context: &mut ExecutionContext) -> usize {
         for arg in context.locals() {
@@ -343,6 +347,34 @@ mod helius_std {
             (0..n).map(Variant::Number).collect(),
         ))));
         1
+    }
+
+    pub fn get_metatable(context: &mut ExecutionContext) -> usize {
+        if let Variant::Map(map) = context.read_local(0) {
+            context.push(match map.borrow().get_metatable() {
+                Some(table) => Variant::Map(table.clone()),
+                None => Variant::default(),
+            })
+        } else {
+            panic!("trying to get metatable of non map object");
+        }
+        1
+    }
+
+    pub fn set_metatable(context: &mut ExecutionContext) -> usize {
+        let map = context.read_local(0);
+        let table = context.read_local(1);
+
+        match (map, table) {
+            (Variant::Map(map), Variant::Map(table)) => {
+                map.borrow_mut().metatable = Some(table);
+            }
+            _ => {
+                panic!("trying to set metatable of non map object")
+            }
+        };
+
+        0
     }
 
     pub mod math {
@@ -546,9 +578,10 @@ impl ExecutionContext {
         let object = self.pop();
 
         let result = match (&object, &index) {
-            (Variant::Map(map), Variant::String(i)) => {
-                map.borrow().get(i).unwrap_or(&Variant::None).clone()
-            }
+            (Variant::Map(map), Variant::String(i)) => match map.borrow().get(i) {
+                Some(value) => value.clone(),
+                None => self.get_metatable_index(map, i).unwrap_or_default(),
+            },
             (Variant::Array(array), Variant::Number(i)) => {
                 array.borrow().index(*i as usize).clone()
             }
@@ -559,6 +592,17 @@ impl ExecutionContext {
         };
 
         self.push(result);
+    }
+
+    fn get_metatable_index(&self, map: &RefCell<MapObject>, i: &str) -> Option<Variant> {
+        match map.borrow().get_metatable() {
+            Some(metatable) => metatable
+                .borrow()
+                .get(i)
+                .cloned()
+                .or_else(|| self.get_metatable_index(map, i)),
+            None => None,
+        }
     }
 
     fn set_index(&mut self) {
@@ -677,6 +721,8 @@ fn main() {
     context.add_native_function("pow", &helius_std::math::pow);
     context.add_native_function("range", &helius_std::range);
     context.add_native_function("len", &helius_std::len);
+    context.add_native_function("get_metatable", &helius_std::get_metatable);
+    context.add_native_function("set_metatable", &helius_std::set_metatable);
 
     let math_module = HashMap::from_iter(
         [

@@ -26,6 +26,12 @@ pub enum Variant {
     None,
 }
 
+impl Default for Variant {
+    fn default() -> Self {
+        Variant::None
+    }
+}
+
 #[derive(Clone)]
 pub struct NativeFunction {
     pub name: String,
@@ -53,14 +59,14 @@ impl DerefMut for MapObject {
 }
 
 impl MapObject {
-    fn new(map: Option<HashMap<String, Variant>>) -> Self {
+    pub fn new(map: Option<HashMap<String, Variant>>) -> Self {
         MapObject {
             map: map.unwrap_or_default(),
             metatable: None,
         }
     }
 
-    fn get_metatable(&self) -> &Option<Rc<RefCell<MapObject>>> {
+    pub fn get_metatable(&self) -> &Option<Rc<RefCell<MapObject>>> {
         &self.metatable
     }
 }

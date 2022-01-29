@@ -15,7 +15,7 @@ mod tokenizer;
 use tokenizer::Tokenizer;
 
 mod parser;
-use parser::Parser;
+use parser::{Parser, ParserResult};
 
 mod variant;
 use variant::{MapObject, NativeFunction, Variant};
@@ -244,7 +244,7 @@ fn show_usage(program_name: &str, error_msg: &str) {
     println!("error: {}", error_msg)
 }
 
-fn main() {
+fn main() -> ParserResult<()> {
     let args: Vec<String> = env::args().collect();
     let program_name = &args[0];
     if args.len() != 2 {
@@ -267,7 +267,7 @@ fn main() {
     let mut parser = Parser::new(tokenizer);
 
     let parser_time = Instant::now();
-    let program = parser.parse();
+    let program = parser.parse()?;
     let parser_time = parser_time.elapsed().as_secs_f64();
     let mut context = ExecutionContext {
         variables: HashMap::new(),
@@ -314,4 +314,6 @@ fn main() {
 
     println!("\n> Parsing took {:.3}ms", parser_time * 1000.0);
     println!("> Execution took {:.3}ms", execution_time * 1000.0);
+
+    Ok(())
 }

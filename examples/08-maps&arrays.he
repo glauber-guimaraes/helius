@@ -59,6 +59,7 @@ m = {
     a = "Hello world",
     print_self = function(self) print(self.a) end,
     address = function(self) print(self) end,
+    recursion = function(self) return self end,
 }
 
 m.print_self(m)
@@ -73,3 +74,6 @@ print(m2:address())
 print "hmm"
 m:print_self()
 m:address()
+
+m3 = m:recursion():recursion()
+assert(m == m3)

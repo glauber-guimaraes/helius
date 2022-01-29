@@ -1,5 +1,3 @@
-use std::process;
-
 use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
     variant::Variant,
@@ -15,14 +13,14 @@ pub struct Parser {
 }
 
 #[derive(Debug)]
-struct ParserError {
+pub struct ParserError {
     msg: String,
     short_msg: String,
     line: usize,
     column: usize,
 }
 
-type ParserResult<T = ()> = Result<T, ParserError>;
+pub type ParserResult<T = ()> = Result<T, ParserError>;
 
 impl Parser {
     pub fn new(tokenizer: Tokenizer) -> Self {
@@ -34,7 +32,7 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Vec<Box<dyn ASTNode>> {
+    pub fn parse(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {
         self.advance();
         let block = self.parse_block();
         assert_eq!(
@@ -45,7 +43,7 @@ impl Parser {
         block
     }
 
-    fn parse_block(&mut self) -> Vec<Box<dyn ASTNode>> {
+    fn parse_block(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {
         let mut statements: Vec<Box<dyn ASTNode>> = vec![];
 
         loop {
@@ -69,10 +67,15 @@ impl Parser {
 
         if self.has_error {
             println!("error: can't compile program due to previous errors");
-            process::exit(1);
+            return Err(ParserError {
+                msg: "can't compile".to_owned(),
+                short_msg: "".to_owned(),
+                line: 0,
+                column: 0,
+            });
         }
 
-        statements
+        Ok(statements)
     }
 
     fn expect(&mut self, token_type: TokenType, msg: &str) -> ParserResult<Token> {
@@ -213,7 +216,7 @@ impl Parser {
         self.expect(TokenType::While, "")?;
         let condition = self.parse_expression(Precedence::Assignment as u32)?;
         self.expect(TokenType::Do, "")?;
-        let block = self.parse_block();
+        let block = self.parse_block()?;
         self.expect(TokenType::End, "a loop must end with an `end`")?;
 
         Ok(Box::new(NodeLoop { condition, block }))
@@ -224,13 +227,13 @@ impl Parser {
         let condition = self.parse_expression(Precedence::Assignment as u32)?;
         self.expect(TokenType::Then, "")?;
 
-        let true_block = self.parse_block();
+        let true_block = self.parse_block()?;
         let mut false_block = vec![];
         if self.match_and_advance(TokenType::Else) {
             if self.peek_type() == TokenType::If {
                 false_block.push(self.parse_conditional()?);
             } else {
-                false_block = self.parse_block();
+                false_block = self.parse_block()?;
             }
         }
         self.match_and_advance(TokenType::End);
@@ -341,7 +344,7 @@ impl Parser {
         }
         let args: Vec<String> = args.into_iter().map(|arg| arg.lexeme).collect();
 
-        let mut block = self.parse_block();
+        let mut block = self.parse_block()?;
         self.expect(
             TokenType::End,
             "a function definition must end with an `end`",
@@ -548,11 +551,18 @@ impl Parser {
             expected_return_count,
         };
 
-        if self.peek_type() == TokenType::Colon {
+        if self.match_and_advance(TokenType::Colon) {
             self_call.expected_return_count = Some(1);
+            if self.peek_type() != TokenType::Identifier {
+                return self.create_error_at_current(
+                    "expected identifier for object call after `:` token",
+                    "expected here",
+                );
+            }
+            let func = self.consume();
             self.parse_object_call(
                 Box::new(self_call),
-                Box::new(NodeNop {}),
+                Box::new(NodeVariant(func.lexeme.into())),
                 expected_return_count,
             )
         } else {
@@ -690,12 +700,27 @@ impl Parser {
 mod tests {
     use crate::{parser::Parser, tokenizer::Tokenizer};
 
+    use super::ParserResult;
+
     #[test]
-    fn can_make_object_call_on_function_return_statement() {
-        let program = "func():call()";
+    fn can_parse_object_call_on_function_return_statement() -> ParserResult<()> {
+        can_parse_program("func():call()")
+    }
+
+    #[test]
+    fn can_parse_chained_object_calls_statement() -> ParserResult<()> {
+        can_parse_program("m:func():func()")
+    }
+
+    #[test]
+    fn can_parse_chained_object_calls_expression() -> ParserResult<()> {
+        can_parse_program("x = m:func():func()")
+    }
+
+    fn can_parse_program(program: &str) -> ParserResult<()> {
         let tokenizer = Tokenizer::new(program.to_string());
         let mut parser = Parser::new(tokenizer);
 
-        parser.parse();
+        parser.parse().map(|_| ())
     }
 }

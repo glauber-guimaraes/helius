@@ -6,7 +6,7 @@ use std::{
     env,
     error::Error,
     fs,
-    iter::{self, FromIterator},
+    iter::{self},
     ops::Index,
     process,
     rc::Rc,
@@ -23,10 +23,11 @@ mod variant;
 use variant::{MapObject, NativeFunction, Variant};
 
 mod lib;
-use lib::helius_std;
 
 mod node;
 use node::{ASTNode, NodeFunctionBlock};
+
+use crate::lib::helius_std::{BaseLibraryLoadExt, MathLibraryLoadExt};
 
 #[derive(Clone)]
 struct FunctionInfo {
@@ -278,29 +279,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         call_info: vec![],
     };
 
-    context.add_native_function("print", &helius_std::print);
-    context.add_native_function("assert", &helius_std::assert);
-    context.add_native_function("pow", &helius_std::math::pow);
-    context.add_native_function("range", &helius_std::range);
-    context.add_native_function("len", &helius_std::len);
-    context.add_native_function("get_metatable", &helius_std::get_metatable);
-    context.add_native_function("set_metatable", &helius_std::set_metatable);
-
-    let math_module = HashMap::from_iter(
-        [
-            NativeFunction {
-                name: "sin".to_owned(),
-                func: &helius_std::math::sin,
-            },
-            NativeFunction {
-                name: "cos".to_owned(),
-                func: &helius_std::math::cos,
-            },
-        ]
-        .iter()
-        .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
-    );
-    context.variable_set("math", math_module.into());
+    context.add_base_library();
+    context.add_math_library();
 
     let execution_time = Instant::now();
     program.run(&mut context)?;
@@ -321,6 +301,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+
+    use crate::lib::helius_std::{BaseLibraryLoadExt, MathLibraryLoadExt};
+
     use super::*;
 
     type TestResult = Result<(), Box<dyn Error>>;
@@ -350,29 +333,8 @@ mod tests {
             call_info: vec![],
         };
 
-        context.add_native_function("print", &helius_std::print);
-        context.add_native_function("assert", &helius_std::assert);
-        context.add_native_function("pow", &helius_std::math::pow);
-        context.add_native_function("range", &helius_std::range);
-        context.add_native_function("len", &helius_std::len);
-        context.add_native_function("get_metatable", &helius_std::get_metatable);
-        context.add_native_function("set_metatable", &helius_std::set_metatable);
-
-        let math_module = HashMap::from_iter(
-            [
-                NativeFunction {
-                    name: "sin".to_owned(),
-                    func: &helius_std::math::sin,
-                },
-                NativeFunction {
-                    name: "cos".to_owned(),
-                    func: &helius_std::math::cos,
-                },
-            ]
-            .iter()
-            .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
-        );
-        context.variable_set("math", math_module.into());
+        context.add_base_library();
+        context.add_math_library();
 
         program.run(&mut context)?;
 

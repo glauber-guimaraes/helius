@@ -1,6 +1,52 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, iter::FromIterator, rc::Rc};
 
-use crate::{variant::Variant, ExecutionContext};
+use crate::{
+    variant::{NativeFunction, Variant},
+    ExecutionContext,
+};
+
+pub trait BaseLibraryLoadExt {
+    fn add_base_library(&mut self);
+}
+
+impl BaseLibraryLoadExt for ExecutionContext {
+    fn add_base_library(&mut self) {
+        self.add_native_function("print", &print);
+        self.add_native_function("assert", &assert);
+        self.add_native_function("range", &range);
+        self.add_native_function("len", &len);
+        self.add_native_function("get_metatable", &get_metatable);
+        self.add_native_function("set_metatable", &set_metatable);
+    }
+}
+
+pub trait MathLibraryLoadExt {
+    fn add_math_library(&mut self);
+}
+
+impl MathLibraryLoadExt for ExecutionContext {
+    fn add_math_library(&mut self) {
+        let math_module = HashMap::from_iter(
+            [
+                NativeFunction {
+                    name: "sin".to_owned(),
+                    func: &math::sin,
+                },
+                NativeFunction {
+                    name: "cos".to_owned(),
+                    func: &math::cos,
+                },
+                NativeFunction {
+                    name: "pow".to_owned(),
+                    func: &math::pow,
+                },
+            ]
+            .iter()
+            .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
+        );
+        self.variable_set("math", math_module.into());
+    }
+}
 
 pub fn print(context: &mut ExecutionContext) -> usize {
     for arg in context.locals() {

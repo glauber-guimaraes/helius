@@ -31,7 +31,7 @@ if variable > 0 then
 end
 
 # functions
-function doStuff(argA, argB) do
+function doStuff(argA, argB)
     print(argA + " " + argB)
 end
 

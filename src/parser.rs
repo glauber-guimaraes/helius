@@ -747,6 +747,11 @@ mod tests {
         can_parse_program("x = m:func():func()")
     }
 
+    #[test]
+    fn can_parse_function_definition_statement() -> ParserResult<()> {
+        can_parse_program("function foo() end")
+    }
+
     fn can_parse_program(program: &str) -> ParserResult<()> {
         let tokenizer = Tokenizer::new(program.to_string());
         let mut parser = Parser::new(tokenizer);

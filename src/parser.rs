@@ -157,6 +157,26 @@ impl Parser {
             return Some(Ok(Box::new(NodeBreak)));
         }
 
+        if self.match_and_advance(TokenType::Function) {
+            let ident = match self.expect(
+                TokenType::Identifier,
+                "expected identifier for function definition",
+            ) {
+                Ok(token) => token,
+                Err(err) => return Some(Err(err)),
+            };
+
+            let func_definition = match self.parse_function_definition() {
+                Ok(f) => f,
+                Err(err) => return Some(Err(err)),
+            };
+
+            return Some(Ok(Box::new(NodeAssignment {
+                identifier: NodeVariant(ident.into()),
+                expression: func_definition,
+            })));
+        }
+
         if current_type != TokenType::Identifier {
             return None;
         }

@@ -318,3 +318,64 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn Error>>;
+
+    #[test]
+    fn test_function_definition_statement() -> TestResult {
+        can_run_program(
+            r#"
+            function foo()
+                return 5
+            end
+
+            assert(foo() == 5)
+        "#,
+        )
+    }
+
+    fn can_run_program(program: &str) -> TestResult {
+        let tokenizer = Tokenizer::new(program.to_string());
+        let mut parser = Parser::new(tokenizer);
+        let program = parser.parse()?;
+
+        let mut context = ExecutionContext {
+            variables: HashMap::new(),
+            stack: vec![],
+            functions: parser.functions.into_iter().map(Rc::new).collect(),
+            call_info: vec![],
+        };
+
+        context.add_native_function("print", &helius_std::print);
+        context.add_native_function("assert", &helius_std::assert);
+        context.add_native_function("pow", &helius_std::math::pow);
+        context.add_native_function("range", &helius_std::range);
+        context.add_native_function("len", &helius_std::len);
+        context.add_native_function("get_metatable", &helius_std::get_metatable);
+        context.add_native_function("set_metatable", &helius_std::set_metatable);
+
+        let math_module = HashMap::from_iter(
+            [
+                NativeFunction {
+                    name: "sin".to_owned(),
+                    func: &helius_std::math::sin,
+                },
+                NativeFunction {
+                    name: "cos".to_owned(),
+                    func: &helius_std::math::cos,
+                },
+            ]
+            .iter()
+            .map(|f| (f.name.to_owned(), Variant::NativeFunction(f.clone()))),
+        );
+        context.variable_set("math", math_module.into());
+
+        program.run(&mut context)?;
+
+        Ok(())
+    }
+}

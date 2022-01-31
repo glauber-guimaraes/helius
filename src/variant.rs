@@ -217,7 +217,7 @@ impl ops::Sub for Variant {
             (Self::Number(lhs), Self::Float(rhs)) => Variant::Float(*lhs as f32 - *rhs),
             (Self::Float(lhs), Self::Number(rhs)) => Variant::Float(*lhs - *rhs as f32),
             _ => {
-                panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
+                panic!("RuntimeError: cannot subtract {:?} and {:?}", self, rhs);
             }
         }
     }
@@ -233,7 +233,7 @@ impl ops::Mul for Variant {
             (Self::Number(lhs), Self::Float(rhs)) => Variant::Float(*lhs as f32 * *rhs),
             (Self::Float(lhs), Self::Number(rhs)) => Variant::Float(*lhs * *rhs as f32),
             _ => {
-                panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
+                panic!("RuntimeError: cannot multiply {:?} by {:?}", self, rhs);
             }
         }
     }
@@ -249,7 +249,7 @@ impl ops::Div for Variant {
             (Self::Number(lhs), Self::Float(rhs)) => Variant::Float(*lhs as f32 / *rhs),
             (Self::Float(lhs), Self::Number(rhs)) => Variant::Float(*lhs / *rhs as f32),
             _ => {
-                panic!("RuntimeError: cannot add {:?} and {:?}", self, rhs);
+                panic!("RuntimeError: cannot divide {:?} by {:?}", self, rhs);
             }
         }
     }

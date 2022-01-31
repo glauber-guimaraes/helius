@@ -1,0 +1,37 @@
+function times(x)
+    f = {
+        x = x,
+    }
+    set_metatable(f, {
+        __call = function(self, n)
+            return self.x * n
+        end
+    })
+    return f
+end
+
+double = times(2)
+triple = times(3)
+
+assert(double(5) == 10)
+assert(triple(5) == 15)
+
+# Once locals and closures are implemented:
+function times(x)
+    return function(n) 
+        return n * x
+    end
+end
+
+# Compiler should see that `x` is local to the function `times` context and create the same structure from above.
+quad = times(4)
+# assert(quad(5) == 20)
+
+# An even better implementation looks like:
+# This considers the __getitem metamethod is implemented
+#function times(x)
+#    local <Generated>_1 = capture(x) # The capture function returns an array with the values
+#    return closure(<Generated>_1, function(self, n)
+#        return self[0] * n
+#    end)
+#end

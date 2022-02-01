@@ -1,0 +1,22 @@
+local foo = "Hi"
+
+function tan(theta)
+    local sin = math.sin(theta)
+    local cos = math.cos(theta)
+
+    assert(foo == none)
+    return sin / cos
+end
+
+assert(tan(0) == 0)
+
+# Bug:
+function foo(n)
+    if true then
+        local x = n
+    end
+
+    assert(x != n)
+end
+
+foo(3)

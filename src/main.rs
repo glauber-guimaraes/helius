@@ -3,6 +3,7 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
+    convert::TryInto,
     env,
     error::Error,
     fs,
@@ -32,8 +33,8 @@ use crate::lib::helius_std::{BaseLibraryLoadExt, MathLibraryLoadExt};
 #[derive(Clone)]
 struct FunctionInfo {
     stack_base: usize,
-    local_variables: Vec<String>,
     arg_count: usize,
+    local_count: usize,
 }
 
 #[derive(Default)]
@@ -54,11 +55,6 @@ impl ExecutionContext {
     }
 
     fn variable_lookup(&self, name: &str) -> Option<&Variant> {
-        if let Some(call_info) = self.call_info.last() {
-            if let Some(position) = call_info.local_variables.iter().position(|var| var == name) {
-                return Some(&self.stack[call_info.stack_base + position]);
-            }
-        }
         self.variables.get(name)
     }
 
@@ -68,6 +64,10 @@ impl ExecutionContext {
 
     fn read_local(&self, index: usize) -> Variant {
         self.stack[self.call_info.last().unwrap().stack_base + index].clone()
+    }
+
+    fn write_local(&mut self, index: usize, value: &Variant) {
+        self.stack[self.call_info.last().unwrap().stack_base + index] = value.clone();
     }
 
     fn locals(&self) -> Vec<Variant> {
@@ -119,8 +119,8 @@ impl ExecutionContext {
         let function = self.pop();
         self.call_info.push(FunctionInfo {
             stack_base: self.stack.len() - args,
-            local_variables: vec![],
             arg_count: args,
+            local_count: args,
         });
 
         let return_count;
@@ -132,7 +132,16 @@ impl ExecutionContext {
             Variant::Function(block) => {
                 let f = self.functions[block as usize].clone();
 
-                self.call_info.last_mut().unwrap().local_variables = f.arg_names.clone();
+                self.call_info.last_mut().unwrap().arg_count = f.arg_count;
+                self.call_info.last_mut().unwrap().local_count = f.locals_count;
+
+                if args < f.arg_count {
+                    self.stack
+                        .extend(iter::repeat(Variant::None).take(f.arg_count - args))
+                }
+
+                self.stack
+                    .extend(iter::repeat(Variant::None).take(f.locals_count - f.arg_count));
 
                 f.execute(self);
                 if let Variant::Number(n) = self.pop() {
@@ -161,7 +170,7 @@ impl ExecutionContext {
             }
         };
         let stack_base = self.call_info.last().unwrap().stack_base;
-        let local_count = args;
+        let local_count = self.call_info.last().unwrap().local_count;
 
         self.stack.drain(stack_base..stack_base + local_count);
 
@@ -240,6 +249,23 @@ impl ExecutionContext {
 
         self.push(array.into());
     }
+
+    fn reserve_locals(&mut self, entry_locals: usize) {
+        self.call_info.push(FunctionInfo {
+            stack_base: 0,
+            arg_count: 0,
+            local_count: entry_locals,
+        });
+        self.stack
+            .extend(iter::repeat(Variant::None).take(entry_locals));
+    }
+
+    fn finish(&mut self) {
+        let stack_base = self.call_info.last().unwrap().stack_base;
+        let local_count = self.call_info.last().unwrap().local_count;
+
+        self.stack.drain(stack_base..stack_base + local_count);
+    }
 }
 
 fn show_usage(program_name: &str, error_msg: &str) {
@@ -285,12 +311,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     let execution_time = Instant::now();
     program.run(&mut context)?;
 
-    if !context.stack.is_empty() {
-        println!("Warning: Stack should be empty when program finishes executing, but contains:");
+    if context.stack.is_empty() {
+        println!("Program finished. No return values");
+    } else if let Variant::Number(return_count) = context.pop() {
+        assert_eq!(
+            context.stack.len(),
+            return_count.try_into().unwrap(),
+            "Stack didn't have all returned variables"
+        );
+        println!("Program finished. Return values:");
+        print!("{}", context.stack[0]);
+        for v in context.stack.iter().skip(1) {
+            print!(", {}", v);
+        }
+        println!();
+    } else {
+        eprintln!("Error: Stack should contain return values when program finishes executing, but top doesn't have a return count:");
         for (i, v) in context.stack.iter().enumerate() {
-            println!("[{}] = {}", i, v);
+            eprintln!("[{}] = {}", i, v);
         }
     }
+
     let execution_time = execution_time.elapsed().as_secs_f64();
 
     println!("\n> Parsing took {:.3}ms", parser_time * 1000.0);

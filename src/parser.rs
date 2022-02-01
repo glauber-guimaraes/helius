@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{convert::TryInto, fmt::Display};
 
 use crate::{
     tokenizer::{Precedence, Token, TokenType, Tokenizer},
@@ -7,11 +7,17 @@ use crate::{
 
 use crate::node::*;
 
+struct FunctionInfo {
+    local_variables: Vec<String>,
+    arg_count: usize,
+}
+
 pub struct Parser {
     tokenizer: Tokenizer,
     current: Option<Token>,
     has_error: bool,
     pub functions: Vec<NodeFunctionBlock>,
+    function_scope: Vec<FunctionInfo>,
 }
 
 #[derive(Debug)]
@@ -39,6 +45,10 @@ impl Parser {
             current: None,
             has_error: false,
             functions: vec![],
+            function_scope: vec![FunctionInfo {
+                local_variables: vec![],
+                arg_count: 0,
+            }],
         }
     }
 
@@ -50,7 +60,10 @@ impl Parser {
             TokenType::Eof,
             "parser should stop at eof"
         );
-        block.map(Program::new)
+        let mut program = block.map(Program::new)?;
+        program.entry_locals = self.function_scope.last().unwrap().local_variables.len();
+
+        Ok(program)
     }
 
     fn parse_block(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {
@@ -171,10 +184,37 @@ impl Parser {
                 Err(err) => return Some(Err(err)),
             };
 
+            let identifier = if self.function_scope.is_empty() {
+                MemoryAccess::Global(ident.lexeme)
+            } else {
+                let scope = self.function_scope.last().unwrap();
+                match scope
+                    .local_variables
+                    .iter()
+                    .position(|var| var == &ident.lexeme)
+                {
+                    Some(index) => MemoryAccess::Local(index),
+                    None => MemoryAccess::Global(ident.lexeme),
+                }
+            };
+
             return Some(Ok(Box::new(NodeAssignment {
-                identifier: NodeVariant(ident.into()),
+                identifier,
                 expression: func_definition,
             })));
+        }
+
+        if self.match_and_advance(TokenType::Local) {
+            let ident = match self.expect(TokenType::Identifier, "Expected after `local` token") {
+                Ok(ident) => ident,
+                Err(err) => return Some(Err(err)),
+            };
+
+            let scope = self.function_scope.last_mut().unwrap();
+            scope.local_variables.push(ident.lexeme.to_owned());
+            if self.match_and_advance(TokenType::Assignment) {
+                return Some(self.parse_assignment(ident));
+            }
         }
 
         if current_type != TokenType::Identifier {
@@ -196,7 +236,7 @@ impl Parser {
                     "expected here",
                 ));
             }
-            let object = Box::new(NodeVariant(ident.into()));
+            let object = self.get_variable_address(&ident.lexeme);
             let method = Box::new(NodeVariant(method.lexeme.into()));
             return Some(self.parse_object_call(object, method, Some(0)));
         }
@@ -204,7 +244,7 @@ impl Parser {
         let current_type = self.peek_type();
         if current_type == TokenType::String || current_type == TokenType::LeftParenthesis {
             let mut call =
-                match self.parse_function_call(Box::new(NodeVariant(ident.into())), Some(0)) {
+                match self.parse_function_call(self.get_variable_address(&ident.lexeme), Some(0)) {
                     Ok(call) => call,
                     Err(err) => return Some(Err(err)),
                 };
@@ -233,7 +273,7 @@ impl Parser {
         }
 
         if [TokenType::LeftSquareBracket, TokenType::Period].contains(&self.peek_type()) {
-            return Some(self.parse_prefix_expression(Box::new(NodeVariant(ident.into()))));
+            return Some(self.parse_prefix_expression(self.get_variable_address(&ident.lexeme)));
         }
 
         unreachable!(
@@ -277,8 +317,23 @@ impl Parser {
 
     fn parse_assignment(&mut self, ident: Token) -> ParserResult<Box<dyn ASTNode>> {
         let expression = self.parse_expression(Precedence::Assignment as u32)?;
+
+        let identifier = if self.function_scope.is_empty() {
+            MemoryAccess::Global(ident.lexeme)
+        } else {
+            let scope = self.function_scope.last().unwrap();
+            match scope
+                .local_variables
+                .iter()
+                .position(|var| var == &ident.lexeme)
+            {
+                Some(index) => MemoryAccess::Local(index),
+                None => MemoryAccess::Global(ident.lexeme),
+            }
+        };
+
         Ok(Box::new(NodeAssignment {
-            identifier: NodeVariant(ident.into()),
+            identifier,
             expression,
         }))
     }
@@ -291,7 +346,7 @@ impl Parser {
         let mut args = NodeExpressionList(vec![]);
         if self.peek_type() == TokenType::String {
             let arg = self.consume();
-            args.push(Box::new(NodeVariant(arg.into())));
+            args.push(Box::new(NodeVariant(arg.lexeme.into())));
         } else {
             self.expect(
                 TokenType::LeftParenthesis,
@@ -374,6 +429,11 @@ impl Parser {
         }
         let args: Vec<String> = args.into_iter().map(|arg| arg.lexeme).collect();
 
+        self.function_scope.push(FunctionInfo {
+            local_variables: args.clone(),
+            arg_count: args.len(),
+        });
+
         let mut block = self.parse_block()?;
         self.expect(
             TokenType::End,
@@ -384,13 +444,29 @@ impl Parser {
             args: NodeExpressionList(vec![]),
         }));
 
+        let locals_count = self.function_scope.last().unwrap().local_variables.len();
         let function_id = self.functions.len() as u32;
         self.functions.push(NodeFunctionBlock {
-            arg_names: args,
+            arg_count: args.len(),
             block,
+            locals_count,
         });
 
+        self.function_scope.pop();
+
         Ok(Box::new(NodeVariant(Variant::Function(function_id))))
+    }
+
+    fn get_variable_address(&self, name: &str) -> Box<dyn ASTNode> {
+        if self.function_scope.is_empty() {
+            return Box::new(NodeVariant(Variant::Identifier(name.to_owned())));
+        }
+
+        let scope = self.function_scope.last().unwrap();
+        match scope.local_variables.iter().position(|var| var == name) {
+            Some(index) => Box::new(NodeLocal(index.try_into().unwrap())),
+            None => Box::new(NodeVariant(Variant::Identifier(name.to_owned()))),
+        }
     }
 
     fn ignore_multiple(&mut self, token_type: TokenType) {
@@ -439,11 +515,11 @@ impl Parser {
             && (self.peek_type() == TokenType::LeftParenthesis
                 || self.peek_type() == TokenType::String)
         {
-            Box::new(self.parse_function_call(Box::new(NodeVariant(lhs.into())), Some(1))?)
+            Box::new(self.parse_function_call(self.get_variable_address(&lhs.lexeme), Some(1))?)
         } else if lhs.is_type(TokenType::Identifier)
             && [TokenType::Period, TokenType::LeftSquareBracket].contains(&self.peek_type())
         {
-            let node = self.parse_get_index(Box::new(NodeVariant(lhs.into())))?;
+            let node = self.parse_get_index(self.get_variable_address(&lhs.lexeme))?;
             if self.peek_type() == TokenType::LeftParenthesis
                 || self.peek_type() == TokenType::String
             {
@@ -461,7 +537,7 @@ impl Parser {
                     "expected here",
                 );
             }
-            let object = Box::new(NodeVariant(lhs.into()));
+            let object = self.get_variable_address(&lhs.lexeme);
             let method = Box::new(NodeVariant(method.lexeme.into()));
             self.parse_object_call(object, method, Some(1))?
         } else if lhs.is_type(TokenType::LeftCurlyBracket) {
@@ -513,6 +589,8 @@ impl Parser {
                 "expected map constructor after `{` token",
             )?;
             Box::new(NodeArrayConstructor { items })
+        } else if lhs.is_type(TokenType::Identifier) {
+            self.get_variable_address(&lhs.lexeme)
         } else {
             Box::new(NodeVariant(lhs.into()))
         };

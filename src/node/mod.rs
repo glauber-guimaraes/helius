@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    convert::TryInto,
     fmt::{self, Display},
 };
 
@@ -46,8 +47,9 @@ impl ASTNode for NodeReturn {
 }
 
 pub struct NodeFunctionBlock {
-    pub arg_names: Vec<String>,
+    pub arg_count: usize,
     pub block: Vec<Box<dyn ASTNode>>,
+    pub locals_count: usize,
 }
 
 impl ASTNode for NodeFunctionBlock {
@@ -220,19 +222,38 @@ impl std::error::Error for RuntimeError {}
 
 pub struct Program {
     instructions: Vec<Box<dyn ASTNode>>,
+    pub entry_locals: usize,
 }
 
 impl Program {
     pub fn new(instructions: Vec<Box<dyn ASTNode>>) -> Self {
-        Self { instructions }
+        Self {
+            instructions,
+            entry_locals: 0,
+        }
     }
 
     pub fn run(&self, context: &mut ExecutionContext) -> RuntimeResult {
+        context.reserve_locals(self.entry_locals);
+
         for instruction in &self.instructions {
             instruction.execute(context);
         }
 
+        context.finish();
+
         Ok(())
+    }
+}
+
+pub struct NodeLocal(pub u32);
+
+impl ASTNode for NodeLocal {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        let local = context.read_local(self.0.try_into().unwrap());
+        context.push(local);
+
+        ContinuationFlow::Normal
     }
 }
 
@@ -315,8 +336,13 @@ impl ASTNode for NodeCall {
     }
 }
 
+pub enum MemoryAccess {
+    Local(usize),
+    Global(String),
+}
+
 pub struct NodeAssignment {
-    pub identifier: NodeVariant,
+    pub identifier: MemoryAccess,
     pub expression: Box<dyn ASTNode>,
 }
 
@@ -324,8 +350,9 @@ impl ASTNode for NodeAssignment {
     fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
         self.expression.execute(context);
         let value = context.pop();
-        if let Variant::Identifier(identifier) = &self.identifier.0 {
-            context.variable_set(identifier, value);
+        match &self.identifier {
+            MemoryAccess::Local(index) => context.write_local(*index, &value),
+            MemoryAccess::Global(name) => context.variable_set(name, value),
         }
 
         ContinuationFlow::Normal

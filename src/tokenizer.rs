@@ -7,6 +7,7 @@ pub enum TokenType {
     Float,
     String,
     Boolean,
+    Local,
     Assignment,
     Plus,
     Minus,
@@ -174,6 +175,7 @@ impl Tokenizer {
                 "break" => TokenType::Break,
                 "continue" => TokenType::Continue,
                 "return" => TokenType::Return,
+                "local" => TokenType::Local,
                 _ => token.r#type,
             };
             Ok(token)

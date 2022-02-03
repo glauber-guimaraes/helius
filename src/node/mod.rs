@@ -246,6 +246,20 @@ impl Program {
     }
 }
 
+pub struct NodeIteration {
+    pub initialization: NodeAssignment,
+    pub block: NodeLoop,
+}
+
+impl ASTNode for NodeIteration {
+    fn execute(&self, context: &mut ExecutionContext) -> ContinuationFlow {
+        self.initialization.execute(context);
+        self.block.execute(context);
+
+        ContinuationFlow::Normal
+    }
+}
+
 pub struct NodeLocal(pub u32);
 
 impl ASTNode for NodeLocal {

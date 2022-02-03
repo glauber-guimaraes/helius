@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, iter::FromIterator, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, convert::TryInto, iter::FromIterator, rc::Rc};
 
 use crate::{
     variant::{NativeFunction, Variant},
@@ -17,6 +17,7 @@ impl BaseLibraryLoadExt for ExecutionContext {
         self.add_native_function("len", &len);
         self.add_native_function("get_metatable", &get_metatable);
         self.add_native_function("set_metatable", &set_metatable);
+        self.add_native_function("iter", &iter);
     }
 }
 
@@ -46,6 +47,84 @@ impl MathLibraryLoadExt for ExecutionContext {
         );
         self.variable_set("math", math_module.into());
     }
+}
+
+fn iter(context: &mut ExecutionContext) -> usize {
+    let source = context.read_local(0);
+    match source {
+        Variant::String(_) | Variant::Map(_) | Variant::Array(_) => {
+            let mut iterator = HashMap::new();
+            iterator.insert("source".to_string(), source);
+            iterator.insert("index".to_string(), Variant::Number(0));
+            iterator.insert("current".to_string(), Variant::None);
+            iterator.insert(
+                "next".to_string(),
+                Variant::NativeFunction(NativeFunction {
+                    name: "iterator_next".to_string(),
+                    func: &iterator_next,
+                }),
+            );
+
+            context.push(iterator.into());
+        }
+        _ => panic!("TypeError: cannot iterate on {:?}", source),
+    }
+    1
+}
+
+fn iterator_next(context: &mut ExecutionContext) -> usize {
+    let this = context.read_local(0);
+    let this = match this {
+        Variant::Map(m) => m,
+        _ => panic!("TypeError: can only call iterator_next on a map object"),
+    };
+
+    let mut this = this.borrow_mut();
+    let current_index = match this.get("index").unwrap() {
+        Variant::Number(i) => *i,
+        _ => unreachable!(""),
+    };
+    let source = this.get("source").unwrap().clone();
+    let count = match &source {
+        Variant::String(s) => s.len(),
+        Variant::Map(m) => m.borrow().len(),
+        Variant::Array(a) => a.borrow().len(),
+        _ => unreachable!(
+            "iterators are created by the compiler, this should always have a compatible type"
+        ),
+    };
+    if current_index == count.try_into().unwrap() {
+        context.push(Variant::Boolean(false));
+        return 1;
+    }
+
+    this.insert(
+        "current".to_string(),
+        match &source {
+            Variant::String(s) => Variant::String(
+                s.chars()
+                    .nth(current_index.try_into().unwrap())
+                    .unwrap()
+                    .to_string(),
+            ),
+            Variant::Map(m) => m
+                .borrow()
+                .keys()
+                .nth(current_index.try_into().unwrap())
+                .unwrap()
+                .clone()
+                .into(),
+            Variant::Array(a) => {
+                let v = a.borrow();
+                v[current_index as usize].clone()
+            }
+            _ => unreachable!(),
+        },
+    );
+
+    this.insert("index".to_string(), Variant::Number(current_index + 1));
+    context.push(Variant::Boolean(true));
+    1
 }
 
 pub fn print(context: &mut ExecutionContext) -> usize {

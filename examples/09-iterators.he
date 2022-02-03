@@ -1,23 +1,9 @@
 t = "Hello"
 
-iter = function(source)
-    return {
-        source = source,
-        index = 0,
-        current = none,
-        next = function (self)
-            if self.index == len(self.source) then
-                return false
-            end
 
-            self.current = self.source[self.index]
-            self.index = self.index + 1
-            return true
-        end,
-    }
-end
 
 it = iter(t)
+print(it)
 while it:next() do
     print(it.current)
 end
@@ -31,6 +17,11 @@ end
 # The function iter returns a map like the one above
 for i in t
     print(i)
+end
+
+for i in it
+    print(i)
+    print(it[i])
 end
 
 # and the compiler should generate:

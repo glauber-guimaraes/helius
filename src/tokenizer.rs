@@ -32,6 +32,8 @@ pub enum TokenType {
     Break,
     Continue,
     Return,
+    For,
+    In,
     Comma,
     Colon,
     Period,
@@ -176,6 +178,8 @@ impl Tokenizer {
                 "continue" => TokenType::Continue,
                 "return" => TokenType::Return,
                 "local" => TokenType::Local,
+                "for" => TokenType::For,
+                "in" => TokenType::In,
                 _ => token.r#type,
             };
             Ok(token)

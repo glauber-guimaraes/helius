@@ -7,9 +7,90 @@ use crate::{
 
 use crate::node::*;
 
-struct FunctionInfo {
+#[derive(Clone)]
+struct Scope {
     local_variables: Vec<String>,
     arg_count: usize,
+    base_index: usize,
+    child: Option<Box<Scope>>,
+}
+
+impl Scope {
+    fn new(parameters: &[String]) -> Self {
+        Scope {
+            local_variables: parameters.to_vec(),
+            arg_count: parameters.len(),
+            base_index: 0,
+            child: None,
+        }
+    }
+
+    fn push(&mut self) {
+        self.add_child_scope(&mut Scope {
+            local_variables: vec![],
+            arg_count: 0,
+            base_index: 0,
+            child: None,
+        })
+    }
+
+    fn add_child_scope(&mut self, scope: &mut Scope) {
+        scope.base_index = self.base_index + self.local_variables.len();
+        match &mut self.child {
+            Some(c) => c.add_child_scope(scope),
+            None => self.child = Some(Box::new(scope.clone())),
+        }
+    }
+
+    fn pop(&mut self) -> Option<Scope> {
+        self.child.as_ref()?;
+
+        match self.child.as_mut().unwrap().pop() {
+            None => {
+                let removed_child = *self.child.take().unwrap();
+
+                self.local_variables.extend(
+                    removed_child
+                        .local_variables
+                        .iter()
+                        .map(|var| format!("<From-Inner-Scope>{}", var)),
+                );
+                Some(removed_child)
+            }
+            Some(scope) => Some(scope),
+        }
+    }
+
+    fn add_local(&mut self, name: &str) {
+        if let Some(child) = &mut self.child {
+            child.add_local(name)
+        } else {
+            self.local_variables.push(name.to_owned())
+        }
+    }
+
+    fn local_index(&self, name: &str) -> Option<usize> {
+        if self.child.is_none() {
+            return self
+                .local_variables
+                .iter()
+                .position(|var| var == name)
+                .map(|index| index + self.base_index);
+        }
+
+        if let Some(index) = self.child.as_ref().unwrap().local_index(name) {
+            return Some(index);
+        }
+
+        self.local_variables
+            .iter()
+            .position(|var| var == name)
+            .map(|index| index + self.base_index)
+    }
+
+    fn local_count(&self) -> usize {
+        self.local_variables.len()
+    }
 }
 
 pub struct Parser {
@@ -17,7 +98,7 @@ pub struct Parser {
     current: Option<Token>,
     has_error: bool,
     pub functions: Vec<NodeFunctionBlock>,
-    function_scope: Vec<FunctionInfo>,
+    function_scope: Vec<Scope>,
 }
 
 #[derive(Debug)]
@@ -45,10 +126,7 @@ impl Parser {
             current: None,
             has_error: false,
             functions: vec![],
-            function_scope: vec![FunctionInfo {
-                local_variables: vec![],
-                arg_count: 0,
-            }],
+            function_scope: vec![Scope::new(&[])],
         }
     }
 
@@ -61,13 +139,15 @@ impl Parser {
             "parser should stop at eof"
         );
         let mut program = block.map(Program::new)?;
-        program.entry_locals = self.function_scope.last().unwrap().local_variables.len();
+        program.entry_locals = self.function_scope.last().unwrap().local_count();
 
         Ok(program)
     }
 
     fn parse_block(&mut self) -> ParserResult<Vec<Box<dyn ASTNode>>> {
         let mut statements: Vec<Box<dyn ASTNode>> = vec![];
+
+        self.function_scope.last_mut().unwrap().push();
 
         loop {
             while self.match_and_advance(TokenType::Newline) {}
@@ -97,6 +177,8 @@ impl Parser {
                 column: 0,
             });
         }
+
+        self.function_scope.last_mut().unwrap().pop();
 
         Ok(statements)
     }
@@ -188,11 +270,7 @@ impl Parser {
                 MemoryAccess::Global(ident.lexeme)
             } else {
                 let scope = self.function_scope.last().unwrap();
-                match scope
-                    .local_variables
-                    .iter()
-                    .position(|var| var == &ident.lexeme)
-                {
+                match scope.local_index(&ident.lexeme) {
                     Some(index) => MemoryAccess::Local(index),
                     None => MemoryAccess::Global(ident.lexeme),
                 }
@@ -211,7 +289,7 @@ impl Parser {
             };
 
             let scope = self.function_scope.last_mut().unwrap();
-            scope.local_variables.push(ident.lexeme.to_owned());
+            scope.add_local(&ident.lexeme);
             if self.match_and_advance(TokenType::Assignment) {
                 return Some(self.parse_assignment(ident));
             }
@@ -322,11 +400,7 @@ impl Parser {
             MemoryAccess::Global(ident.lexeme)
         } else {
             let scope = self.function_scope.last().unwrap();
-            match scope
-                .local_variables
-                .iter()
-                .position(|var| var == &ident.lexeme)
-            {
+            match scope.local_index(&ident.lexeme) {
                 Some(index) => MemoryAccess::Local(index),
                 None => MemoryAccess::Global(ident.lexeme),
             }
@@ -429,10 +503,7 @@ impl Parser {
         }
         let args: Vec<String> = args.into_iter().map(|arg| arg.lexeme).collect();
 
-        self.function_scope.push(FunctionInfo {
-            local_variables: args.clone(),
-            arg_count: args.len(),
-        });
+        self.function_scope.push(Scope::new(&args));
 
         let mut block = self.parse_block()?;
         self.expect(
@@ -444,15 +515,13 @@ impl Parser {
             args: NodeExpressionList(vec![]),
         }));
 
-        let locals_count = self.function_scope.last().unwrap().local_variables.len();
+        let locals_count = self.function_scope.last().unwrap().local_count();
         let function_id = self.functions.len() as u32;
         self.functions.push(NodeFunctionBlock {
             arg_count: args.len(),
             block,
             locals_count,
         });
-
-        self.function_scope.pop();
 
         Ok(Box::new(NodeVariant(Variant::Function(function_id))))
     }
@@ -463,7 +532,7 @@ impl Parser {
         }
 
         let scope = self.function_scope.last().unwrap();
-        match scope.local_variables.iter().position(|var| var == name) {
+        match scope.local_index(name) {
             Some(index) => Box::new(NodeLocal(index.try_into().unwrap())),
             None => Box::new(NodeVariant(Variant::Identifier(name.to_owned()))),
         }

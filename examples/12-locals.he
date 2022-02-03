@@ -20,3 +20,19 @@ function foo(n)
 end
 
 foo(3)
+
+function foo(n)
+    if true then
+        local x = n
+        while x > 0 do
+            local msg = x
+            print(msg)
+            x = x - 1
+        end
+    end
+
+    assert(x != n)
+    assert(msg == none)
+end
+
+foo(3)

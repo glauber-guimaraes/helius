@@ -29,13 +29,13 @@ end
 
 # When locals are implemented this should be available:
 # The function iter returns a map like the one above
-# for i in iter(t) do
-#     print(i)
-# end
+for i in t
+    print(i)
+end
 
 # and the compiler should generate:
 # local <Generated#0>it = iter(t) # This should use a name that is impossible to collide with user generated ones
-# while <Generated#0>it.next() do
+# while <Generated#0>it:next() do
 #     local i = <Generated#0>it.current
 #     # Hereafter is the user defined block
 #     print(i)

@@ -295,6 +295,10 @@ impl Parser {
             }
         }
 
+        if self.match_and_advance(TokenType::For) {
+            return Some(self.parse_iteration());
+        }
+
         if current_type != TokenType::Identifier {
             return None;
         }
@@ -870,6 +874,68 @@ impl Parser {
         } else {
             Ok(Box::new(NodeGetIndex { base, name: index }))
         }
+    }
+
+    fn parse_iteration(&mut self) -> ParserResult<Box<dyn ASTNode>> {
+        let ident = self.expect(
+            TokenType::Identifier,
+            "iteration variable must be an identifier",
+        )?;
+
+        self.expect(TokenType::In, "")?;
+
+        let iterable = self.parse_expression(Precedence::Assignment as u32)?;
+
+        let generated_iterator = format!("<Generated>{}-Iterator", ident.lexeme);
+
+        let scope = self.function_scope.last_mut().unwrap();
+
+        scope.add_local(&generated_iterator);
+
+        let iterator_index = scope.local_index(&generated_iterator).unwrap();
+
+        // it = iter(t)
+        let assignment_node = NodeAssignment {
+            identifier: MemoryAccess::Local(iterator_index),
+            expression: Box::new(NodeCall {
+                func: Box::new(NodeVariant(Variant::Identifier("iter".to_string()))),
+                args: NodeExpressionList(vec![iterable]),
+                expected_return_count: Some(1),
+            }),
+        };
+
+        scope.add_local(&ident.lexeme);
+        let ident_index = scope.local_index(&ident.lexeme).unwrap();
+
+        let mut block = self.parse_block()?;
+        self.expect(TokenType::End, "for loop should end with `end` token")?;
+
+        block.insert(
+            0,
+            // local ident = it.current
+            Box::new(NodeAssignment {
+                identifier: MemoryAccess::Local(ident_index),
+                expression: Box::new(NodeGetIndex {
+                    base: Box::new(NodeLocal(iterator_index.try_into().unwrap())),
+                    name: Box::new(NodeVariant(Variant::String("current".to_string()))),
+                }),
+            }),
+        );
+
+        let loop_node = NodeLoop {
+            condition: Box::new(NodeSelfCall {
+                object: Box::new(NodeLocal(iterator_index.try_into().unwrap())),
+                func: Box::new(NodeVariant(Variant::String("next".to_string()))),
+                args: NodeExpressionList(vec![]),
+                expected_return_count: Some(1),
+            }),
+            block,
+        };
+
+        Ok(Box::new(NodeIteration {
+            initialization: assignment_node,
+            block: loop_node,
+        }))
     }
 }
 

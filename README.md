@@ -2,14 +2,7 @@
 **WARNING!** This language is a learning experience in Rust and should not be used. 
 
 ## TODO
-* Add iteration
-```python
-for i in range(5) do
-```
-* Add local variables
 * Add closures
-* Add iterators
-* Add metamethods
 * Implement bytecode vm
 
 ## Expected features
@@ -43,6 +36,11 @@ myArray[5] = 0
 # structure or map
 myStruct = {}
 myStruct.a = 3
+
+# Iteration
+for i in "Hello"
+    print(i)
+end
 ```
 
 ## Implemented so far

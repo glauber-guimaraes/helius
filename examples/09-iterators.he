@@ -24,10 +24,6 @@ for i in it
     print(it[i])
 end
 
-# and the compiler should generate:
-# local <Generated#0>it = iter(t) # This should use a name that is impossible to collide with user generated ones
-# while <Generated#0>it:next() do
-#     local i = <Generated#0>it.current
-#     # Hereafter is the user defined block
-#     print(i)
-# end
+for i in "Hello"
+    print(i)
+end
